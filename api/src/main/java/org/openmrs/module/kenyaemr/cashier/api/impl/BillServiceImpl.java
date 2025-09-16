@@ -766,7 +766,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 		// Fallback to the original hardcoded logo if facility information is not available
 		try {
-			URL logoUrl = BillServiceImpl.class.getClassLoader().getResource("img/kenyaemr-primary-logo.png");
+			URL logoUrl = BillServiceImpl.class.getClassLoader().getResource("img/luqman-logo-black.svg");
 			if (logoUrl != null) {
 				return new Image(ImageDataFactory.create(logoUrl));
 			}
