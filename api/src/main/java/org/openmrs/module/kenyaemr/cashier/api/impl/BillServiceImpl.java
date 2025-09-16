@@ -460,7 +460,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		int FONT_SIZE_8 = 8;
 		int FONT_SIZE_12 = 12;
 		PdfDocument pdfDoc = new PdfDocument(new PdfWriter(fos));
-		Rectangle thermalPrinterPageSize = new Rectangle(288, 14400);
+		Rectangle thermalPrinterPageSize = new Rectangle(288, 720);
 		Document doc = new Document(pdfDoc, new PageSize(thermalPrinterPageSize));
 		doc.setMargins(6,12,2,12);
 		PdfFont timesRoman;
