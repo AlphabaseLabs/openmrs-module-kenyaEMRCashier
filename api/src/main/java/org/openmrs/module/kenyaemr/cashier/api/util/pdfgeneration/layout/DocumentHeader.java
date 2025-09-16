@@ -240,7 +240,7 @@ public class DocumentHeader {
                     .setMargin(0));
         } else {
             headerTable.addCell(new com.itextpdf.layout.element.Cell()
-                    .add(new Paragraph("LOGO").setFontSize(22).setBold().setTextAlignment(TextAlignment.CENTER))
+                    .add(new Paragraph("LUQMAN-EMR").setFontSize(22).setBold().setTextAlignment(TextAlignment.CENTER))
                     .setBorder(null)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
                     .setTextAlignment(TextAlignment.CENTER)
