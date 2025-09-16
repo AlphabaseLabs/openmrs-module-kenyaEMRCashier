@@ -15,14 +15,14 @@ public class CurrencyUtil {
 
     private static final String CURRENCY_SYMBOL_KEY = "openhmis.cashier.currency.symbol";
     private static final String CURRENCY_FORMAT_KEY = "openhmis.cashier.currency.format";
-    private static final String DEFAULT_CURRENCY_SYMBOL = "Ksh";
+    private static final String DEFAULT_CURRENCY_SYMBOL = "Pkr";
     private static final String DEFAULT_CURRENCY_FORMAT = "#,##0.00";
 
     /**
      * Format a BigDecimal amount with the internationalized currency symbol
      * 
      * @param amount the amount to format
-     * @return formatted currency string (e.g., "Ksh 1,234.56")
+     * @return formatted currency string (e.g., "Pkr 1,234.56")
      */
     public static String formatCurrency(BigDecimal amount) {
         if (amount == null) {
