@@ -47,6 +47,7 @@ import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientIdentifierType;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.kenyaemr.cashier.ModuleSettings;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IDepositService;
 import org.openmrs.module.kenyaemr.cashier.api.IReceiptNumberGenerator;
@@ -436,7 +437,10 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
             throw new RuntimeException(e);
         }
 
-		PatientIdentifierType openmrsIdType = Context.getPatientService().getPatientIdentifierTypeByUuid(OPENMRS_ID);
+		// Luqman: Get patient identifier type id from global property
+		String patientIdentifierTypeId = Context.getAdministrationService()
+		        .getGlobalProperty(ModuleSettings.PATIENT_IDENTIFIER_TYPE_ID);
+		PatientIdentifierType openmrsIdType = Context.getPatientService().getPatientIdentifierTypeByUuid(patientIdentifierTypeId);
 		PatientIdentifier openmrsId = patient.getPatientIdentifier(openmrsIdType); // TODO: we should check for any NULL
         /**
 		 * https://kb.itextpdf.com/home/it7kb/faq/how-to-set-the-page-size-to-envelope-size-with-landscape-orientation
