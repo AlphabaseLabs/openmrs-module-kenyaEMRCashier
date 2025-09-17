@@ -35,7 +35,6 @@ public class CashierSettings {
 	private Integer shiftSummaryReportId;
 	private Integer dailyShiftSummaryReportId;
 	private Integer paymentsByPaymentModeReportId;
-	private String patientIdentifierTypeId;
 
 	public Boolean getAdjustmentReasonField() {
 		return adjustmentReasonField;
@@ -155,15 +154,5 @@ public class CashierSettings {
 
 	public void setPaymentsByPaymentModeReportId(Integer paymentsByPaymentModeReportId) {
 		this.paymentsByPaymentModeReportId = paymentsByPaymentModeReportId;
-	}
-
-	// Getter for PATIENT_IDENTIFIER_TYPE_ID
-	public String getPatientIdentifierTypeId() {
-		return patientIdentifierTypeId;
-	}
-
-	// Setter for PATIENT_IDENTIFIER_TYPE_ID
-	public void setPatientIdentifierTypeId(String value) {
-		this.patientIdentifierTypeId = value;
 	}
 }

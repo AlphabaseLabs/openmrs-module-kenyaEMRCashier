@@ -35,14 +35,15 @@ public class ModuleSettings {
 	public static final String ADJUSTMENT_REASEON_FIELD = "openhmis.cashier.adjustmentReasonField";
 	public static final String ALLOW_BILL_ADJUSTMENT = "openhmis.cashier.allowBillAdjustments";
 	public static final String AUTOFILL_PAYMENT_AMOUNT = "openhmis.cashier.autofillPaymentAmount";
-	public static final String PATIENT_DASHBOARD_2_BILL_COUNT = "openhmis.cashier.patientDashboard2BillCount";
+	public static final String PATIENT_DASHBOARD_2_BILL_COUNT =
+	        "openhmis.cashier.patientDashboard2BillCount";
 	private static final Integer DEFAULT_PATIENT_DASHBOARD_2_BILL_COUNT = 4;
 	public static final String DEPARTMENT_COLLECTIONS_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentCollections";
 	public static final String DEPARTMENT_REVENUE_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentRevenue";
 	public static final String SHIFT_SUMMARY_REPORT_ID_PROPERTY = "openhmis.cashier.reports.shiftSummary";
 	public static final String DAILY_SHIFT_SUMMARY_REPORT_ID_PROPERTY = "openhmis.cashier.reports.dailyShiftSummary";
-	public static final String PAYMENTS_BY_PAYMENT_MODE_REPORT_ID_PROPERTY = "openhmis.cashier.reports.paymentsByPaymentMode";
-	public static final String PATIENT_IDENTIFIER_TYPE_ID = "openhmis.cashier.patientIdentifierTypeId";
+	public static final String PAYMENTS_BY_PAYMENT_MODE_REPORT_ID_PROPERTY =
+	        "openhmis.cashier.reports.paymentsByPaymentMode";
 
 	private static final AdministrationService administrationService;
 
@@ -50,8 +51,7 @@ public class ModuleSettings {
 		administrationService = Context.getAdministrationService();
 	}
 
-	protected ModuleSettings() {
-	}
+	protected ModuleSettings() {}
 
 	public static Integer getReceiptReportId() {
 		return getIntProperty(RECEIPT_REPORT_ID_PROPERTY);
@@ -156,11 +156,6 @@ public class ModuleSettings {
 			}
 		});
 
-		String pit = administrationService.getGlobalProperty(PATIENT_IDENTIFIER_TYPE_ID);
-		if (!StringUtils.isEmpty(pit)) {
-			cashierSettings.setPatientIdentifierTypeId(pit);
-		}
-
 		return cashierSettings;
 	}
 
@@ -183,11 +178,9 @@ public class ModuleSettings {
 		setIntProperty(SHIFT_SUMMARY_REPORT_ID_PROPERTY, cashierSettings.getShiftSummaryReportId());
 		setIntProperty(DAILY_SHIFT_SUMMARY_REPORT_ID_PROPERTY, cashierSettings.getDailyShiftSummaryReportId());
 		setIntProperty(PAYMENTS_BY_PAYMENT_MODE_REPORT_ID_PROPERTY, cashierSettings.getPaymentsByPaymentModeReportId());
-		setStringProperty(PATIENT_IDENTIFIER_TYPE_ID, cashierSettings.getPatientIdentifierTypeId());
 	}
 
-	// TODO: These functions should be moved to a commons-level base class for
-	// module settings classes
+	// TODO: These functions should be moved to a commons-level base class for module settings classes
 	private static Boolean getBoolProperty(String propertyName) {
 		Boolean result = null;
 		String property = administrationService.getGlobalProperty(propertyName);
@@ -257,5 +250,4 @@ public class ModuleSettings {
 			administrationService.setGlobalProperty(propertyName, "");
 		}
 	}
-
 }

@@ -185,10 +185,6 @@
 				}
 			}
 		</defaultValue>
-	<globalProperty>
-		<property>${project.parent.artifactId}.patientIdentifierTypeId</property>
-		<description>Patient Identifier Type UUID</description>
-	</globalProperty>
 	</globalProperty>
 	<!-- Privileges -->
 	<!--  Bills  -->
