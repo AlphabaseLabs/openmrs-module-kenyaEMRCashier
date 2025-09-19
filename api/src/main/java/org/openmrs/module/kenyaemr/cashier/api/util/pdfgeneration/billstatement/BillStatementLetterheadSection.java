@@ -78,16 +78,16 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         Patient patient = bill.getPatient();
 
         // Create a table for patient info and bill summary
-        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 1, 1 }))
+        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 1.2f, 2f }))
                 .setWidth(UnitValue.createPercentValue(100))
                 .setMarginTop(CONTENT_SPACING)
                 .setMarginBottom(HEADER_SPACING);
 
         // Add patient information cell
-        summaryTable.addCell(createPatientInfoCell(patient, bill));
+        summaryTable.addCell(createPatientInfoCell(patient, bill).setTextAlignment(TextAlignment.LEFT));
 
         // Add bill summary cell
-        summaryTable.addCell(createBillSummaryCell(bill));
+        summaryTable.addCell(createBillSummaryCell(bill).setTextAlignment(TextAlignment.RIGHT));
 
         doc.add(summaryTable);
     }
@@ -107,7 +107,8 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         cell.add(createInfoLine("Age:", patient.getBirthdate() != null ? String.valueOf(patient.getAge()) : ""));
         cell.add(createInfoLine("Gender:", patient.getGender() != null ? patient.getGender() : ""));
         cell.add(createInfoLine("Bill #:", bill.getReceiptNumber()));
-        cell.add(createInfoLine("Date:", bill.getDateCreated() != null ? DATE_FORMAT.format(bill.getDateCreated()) : ""));
+        cell.add(createInfoLine("Date:",
+                bill.getDateCreated() != null ? DATE_FORMAT.format(bill.getDateCreated()) : ""));
 
         return cell;
     }
@@ -126,16 +127,16 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         cell.add(createInfoLine("Status:", bill.getStatus() != null ? bill.getStatus().name() : "UNKNOWN"));
         cell.add(createInfoLine("Total Bill:", CurrencyUtil.formatCurrency(bill.getTotal())));
         cell.add(createInfoLine("Total Paid:", CurrencyUtil.formatCurrency(bill.getTotalPayments())));
-        
+
         // Balance Due
         java.math.BigDecimal balance = bill.getTotal().subtract(bill.getTotalPayments());
         cell.add(createInfoLine("Balance:", CurrencyUtil.formatCurrency(balance)));
-        
+
         // Cash Point
         if (bill.getCashPoint() != null) {
             cell.add(createInfoLine("Cash Point:", bill.getCashPoint().getName()));
         }
-        
+
         // Cashier
         if (bill.getCashier() != null) {
             cell.add(createInfoLine("Cashier:", bill.getCashier().getName()));
@@ -197,5 +198,4 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         return patient.getPatientId() != null ? patient.getPatientId().toString() : "N/A";
     }
 
-
-} 
+}

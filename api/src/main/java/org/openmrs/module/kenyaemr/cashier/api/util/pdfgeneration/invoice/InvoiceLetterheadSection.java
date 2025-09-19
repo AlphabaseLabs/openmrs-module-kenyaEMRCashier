@@ -8,7 +8,8 @@ import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.properties.VerticalAlignment;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.DocumentHeader;
 
-public class InvoiceLetterheadSection implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.LetterheadSection {
+public class InvoiceLetterheadSection
+        implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.LetterheadSection {
 
     public static final String OPENMRS_ID = "dfacd928-0370-4315-99d7-6ec1c9f7ae76";
 
@@ -35,16 +36,17 @@ public class InvoiceLetterheadSection implements org.openmrs.module.kenyaemr.cas
         InvoiceData invoiceData = extractInvoiceData(data);
 
         // Create a table for patient info and invoice summary
-        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 1, 1 }))
+        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 1.2f, 2f }))
                 .setWidth(UnitValue.createPercentValue(100))
                 .setMarginTop(CONTENT_SPACING)
                 .setMarginBottom(HEADER_SPACING);
 
         // Add patient information cell
-        headerTable.addCell(createPatientInfoCell(invoiceData));
+        headerTable.addCell(createPatientInfoCell(invoiceData).setTextAlignment(TextAlignment.LEFT));
 
         // Add invoice summary cell
-        headerTable.addCell(createInvoiceSummaryCell(invoiceData));
+        headerTable.addCell(createInvoiceSummaryCell(invoiceData).setTextAlignment(TextAlignment.RIGHT));
+
 
         doc.add(headerTable);
     }
