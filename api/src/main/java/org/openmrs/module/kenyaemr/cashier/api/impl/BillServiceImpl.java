@@ -90,8 +90,8 @@ import java.util.HashSet;
  * Data service implementation class for {@link Bill}s.
  */
 @Transactional
-public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements IEntityAuthorizationPrivileges
-        , IBillService {
+public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill>
+		implements IEntityAuthorizationPrivileges, IBillService {
 
 	private static final int MAX_LENGTH_RECEIPT_NUMBER = 255;
 	private static final Log LOG = LogFactory.getLog(BillServiceImpl.class);
@@ -102,11 +102,11 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	public static final String OPENMRS_ID = "dfacd928-0370-4315-99d7-6ec1c9f7ae76";
 	public static final String PAYMENT_REFERENCE_ATTRIBUTE = "d453e528-0264-4d6e-ae23-bc0b777e1146";
 
-
 	@Override
 	protected IEntityAuthorizationPrivileges getPrivileges() {
 		return this;
 	}
+
 	DecimalFormat df = new DecimalFormat("0.00");
 
 	@Override
@@ -115,7 +115,9 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	}
 
 	/**
-	 * Validates payment attributes to ensure no duplicate values exist within the same bill for the same attribute type.
+	 * Validates payment attributes to ensure no duplicate values exist within the
+	 * same bill for the same attribute type.
+	 * 
 	 * @param bill The bill to validate
 	 */
 	private void validatePaymentAttributes(Bill bill) {
@@ -125,28 +127,29 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 		// Track attribute values per attribute type across all payments in the bill
 		Map<String, Set<String>> attributeTypeValues = new HashMap<>();
-		
+
 		for (Payment payment : bill.getPayments()) {
 			if (payment.getAttributes() != null) {
 				for (PaymentAttribute attribute : payment.getAttributes()) {
 					if (attribute.getAttributeType() != null && StringUtils.isNotBlank(attribute.getValue())) {
 						String attributeTypeId = attribute.getAttributeType().getId().toString();
 						String attributeValue = attribute.getValue().trim();
-						
+
 						// Initialize the set for this attribute type if it doesn't exist
 						if (!attributeTypeValues.containsKey(attributeTypeId)) {
 							attributeTypeValues.put(attributeTypeId, new HashSet<>());
 						}
-						
+
 						// Check if this value already exists for this attribute type
 						Set<String> existingValues = attributeTypeValues.get(attributeTypeId);
 						if (existingValues.contains(attributeValue)) {
 							throw new IllegalArgumentException(
-								String.format("Duplicate payment attribute value '%s' found for attribute type '%s' across multiple payments in the same bill",
-									attributeValue,
-									attribute.getAttributeType().getName()));
+									String.format(
+											"Duplicate payment attribute value '%s' found for attribute type '%s' across multiple payments in the same bill",
+											attributeValue,
+											attribute.getAttributeType().getName()));
 						}
-						
+
 						// Add this value to the set
 						existingValues.add(attributeValue);
 					}
@@ -156,7 +159,9 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	}
 
 	/**
-	 * Saves the bill to the database, creating a new bill or updating an existing one.
+	 * Saves the bill to the database, creating a new bill or updating an existing
+	 * one.
+	 * 
 	 * @param bill The bill to be saved.
 	 * @return The saved bill.
 	 * @should Generate a new receipt number if one has not been defined.
@@ -171,7 +176,8 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			throw new NullPointerException("The bill must be defined.");
 		}
 
-		/* Check for refund.
+		/*
+		 * Check for refund.
 		 * A refund is given when the total of the bill's line items is negative.
 		 */
 		if (bill.getTotal().compareTo(BigDecimal.ZERO) < 0 && !Context.hasPrivilege(PrivilegeConstants.REFUND_MONEY)) {
@@ -179,8 +185,9 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		}
 		IReceiptNumberGenerator generator = ReceiptNumberGeneratorFactory.getGenerator();
 		if (generator == null) {
-			LOG.warn("No receipt number generator has been defined.  Bills will not be given a receipt number until one is"
-			        + " defined.");
+			LOG.warn(
+					"No receipt number generator has been defined.  Bills will not be given a receipt number until one is"
+							+ " defined.");
 		} else {
 			if (StringUtils.isEmpty(bill.getReceiptNumber())) {
 				bill.setReceiptNumber(generator.generateNumber(bill));
@@ -194,27 +201,31 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		}
 
 		List<Bill> bills = searchBill(bill.getPatient());
-		if(!bills.isEmpty()) {
+		if (!bills.isEmpty()) {
 			Bill billToUpdate = bills.get(0);
-			LOG.info("Found existing bill: " + billToUpdate.getReceiptNumber() + " with status: " + billToUpdate.getStatus() + ", closed: " + billToUpdate.isClosed() + ", voided: " + billToUpdate.getVoided());
-			
+			LOG.info("Found existing bill: " + billToUpdate.getReceiptNumber() + " with status: "
+					+ billToUpdate.getStatus() + ", closed: " + billToUpdate.isClosed() + ", voided: "
+					+ billToUpdate.getVoided());
+
 			// Check if the existing bill is closed or voided
 			if (billToUpdate.isClosed() || billToUpdate.getVoided()) {
-				// If the bill is closed or voided, create a new bill instead of adding to the existing one
-				LOG.info("Bill " + billToUpdate.getReceiptNumber() + " is closed or voided. Creating new bill for patient " + bill.getPatient().getPatientId());
+				// If the bill is closed or voided, create a new bill instead of adding to the
+				// existing one
+				LOG.info("Bill " + billToUpdate.getReceiptNumber()
+						+ " is closed or voided. Creating new bill for patient " + bill.getPatient().getPatientId());
 				return super.save(bill);
 			}
-			
+
 			// If the existing bill is not closed, add new items to it
 			// Set status to PENDING if it was PAID/POSTED to allow new items
 			if (billToUpdate.getStatus() == BillStatus.PAID || billToUpdate.getStatus() == BillStatus.POSTED) {
 				LOG.info("Setting bill status from " + billToUpdate.getStatus() + " to PENDING to allow new items");
 				billToUpdate.setStatus(BillStatus.PENDING);
 			}
-			
+
 			// Create a copy of the line items to avoid ConcurrentModificationException
 			List<BillLineItem> itemsToAdd = new ArrayList<>(bill.getLineItems());
-			for (BillLineItem item: itemsToAdd) {
+			for (BillLineItem item : itemsToAdd) {
 				item.setBill(billToUpdate);
 				billToUpdate.getLineItems().add(item);
 			}
@@ -291,15 +302,16 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				billSearch.updateCriteria(criteria);
 			}
 		}, Order.desc("id"));
-		
+
 		// Clean up null line items before returning
 		removeNullLineItems(results);
 		return results;
 	}
 
 	/*
-		These methods are overridden to ensure that any null line items (created as part of a bug in 1.7.0) are removed
-		from the results before being returned to the caller.
+	 * These methods are overridden to ensure that any null line items (created as
+	 * part of a bug in 1.7.0) are removed
+	 * from the results before being returned to the caller.
 	 */
 	@Override
 	public List<Bill> getAll(boolean includeVoided, PagingInfo pagingInfo) {
@@ -344,15 +356,18 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			return;
 		}
 
-		// Search for any null line items (due to a bug in 1.7.0) and remove them from the line items
+		// Search for any null line items (due to a bug in 1.7.0) and remove them from
+		// the line items
 		int index = bill.getLineItems().indexOf(null);
 		while (index >= 0) {
 			bill.getLineItems().remove(index);
 
 			index = bill.getLineItems().indexOf(null);
 		}
-		// Note: We don't remove voided line items here to avoid conflicts with REST API filtering
-		// The REST layer will handle voided item filtering based on the includeVoidedLineItems parameter
+		// Note: We don't remove voided line items here to avoid conflicts with REST API
+		// filtering
+		// The REST layer will handle voided item filtering based on the
+		// includeVoidedLineItems parameter
 	}
 
 	@Override
@@ -410,6 +425,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 	/**
 	 * Generate a pdf receipt
+	 * 
 	 * @param bill The bill search settings.
 	 * @return
 	 */
@@ -418,34 +434,33 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 		Patient patient = bill.getPatient();
 		String fullName = patient.getGivenName().concat(" ").concat(
-				patient.getMiddleName() != null ? bill.getPatient().getMiddleName() : ""
-		).concat(" ").concat(
-				patient.getFamilyName() != null ? bill.getPatient().getFamilyName() : ""
-		);
+				patient.getMiddleName() != null ? bill.getPatient().getMiddleName() : "").concat(" ").concat(
+						patient.getFamilyName() != null ? bill.getPatient().getFamilyName() : "");
 
-        File returnFile = null;
-        try {
-            returnFile = File.createTempFile("patientReceipt", ".pdf");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        FileOutputStream fos = null;
-        try {
-            fos = new FileOutputStream(returnFile);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+		File returnFile = null;
+		try {
+			returnFile = File.createTempFile("patientReceipt", ".pdf");
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		FileOutputStream fos = null;
+		try {
+			fos = new FileOutputStream(returnFile);
+		} catch (FileNotFoundException e) {
+			throw new RuntimeException(e);
+		}
 
 		PatientIdentifierType openmrsIdType = Context.getPatientService().getPatientIdentifierTypeByUuid(OPENMRS_ID);
 		PatientIdentifier openmrsId = patient.getPatientIdentifier(openmrsIdType); // TODO: we should check for any NULL
-        /**
+		/**
 		 * https://kb.itextpdf.com/home/it7kb/faq/how-to-set-the-page-size-to-envelope-size-with-landscape-orientation
 		 * page size: 3.5inch length, 1.1 inch height
 		 * 1mm = 0.0394 inch
 		 * length = 450mm = 17.7165 inch = 127.5588 points
 		 * height = 300mm = 11.811 inch = 85.0392 points
 		 *
-		 * The measurement system in PDF doesn't use inches, but user units. By default, 1 user unit = 1 point, and 1 inch = 72 points.
+		 * The measurement system in PDF doesn't use inches, but user units. By default,
+		 * 1 user unit = 1 point, and 1 inch = 72 points.
 		 *
 		 * Thermal printer: 4 x 10 inches paper
 		 * 4 inches = 4 x 72 = 288
@@ -458,7 +473,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		PdfDocument pdfDoc = new PdfDocument(new PdfWriter(fos));
 		Rectangle thermalPrinterPageSize = new Rectangle(288, 720);
 		Document doc = new Document(pdfDoc, new PageSize(thermalPrinterPageSize));
-		doc.setMargins(6,12,2,12);
+		doc.setMargins(6, 12, 2, 12);
 		PdfFont timesRoman;
 		PdfFont courier;
 		PdfFont courierBold;
@@ -478,31 +493,35 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		PdfFont headerSectionFont = helveticaBold;
 		PdfFont billItemSectionFont = helvetica;
 		PdfFont footerSectionFont = courierBold;
-		
+
 		// Get facility information from global property
 		FacilityInfo facilityInfo = getFacilityInformation();
 		Image logoImage = getLogoFromFacilityInformation();
-		
+
 		Paragraph divider = new Paragraph("------------------------------------------------------------------");
 		Text billDateLabel = new Text(Utils.getSimpleDateFormat("dd-MMM-yyyy HH:mm:ss").format(bill.getDateCreated()));
 
 		// Use facility name from facility information, fallback to location name
 		GlobalProperty gp = Context.getAdministrationService().getGlobalPropertyObject(GP_DEFAULT_LOCATION);
-		String facilityNameText = StringUtils.isNotEmpty(facilityInfo.facilityName) ? 
-			facilityInfo.facilityName : 
-			(gp != null && gp.getValue() != null ? ((Location) gp.getValue()).getName() : bill.getCashPoint().getLocation().getName());
+		String facilityNameText = StringUtils.isNotEmpty(facilityInfo.facilityName) ? facilityInfo.facilityName
+				: (gp != null && gp.getValue() != null ? ((Location) gp.getValue()).getName()
+						: bill.getCashPoint().getLocation().getName());
 		Text facilityName = new Text(facilityNameText);
 
-		// Use address from facility information contacts, fallback to old global property
+		// Use address from facility information contacts, fallback to old global
+		// property
 		String addressText = "";
 		if (facilityInfo.contacts != null && StringUtils.isNotEmpty(facilityInfo.contacts.address)) {
 			addressText = facilityInfo.contacts.address;
 		} else {
-			GlobalProperty gpFacilityAddress = Context.getAdministrationService().getGlobalPropertyObject(GP_FACILITY_ADDRESS_DETAILS);
-			addressText = gpFacilityAddress != null && gpFacilityAddress.getValue() != null ? gpFacilityAddress.getPropertyValue() : "";
+			GlobalProperty gpFacilityAddress = Context.getAdministrationService()
+					.getGlobalPropertyObject(GP_FACILITY_ADDRESS_DETAILS);
+			addressText = gpFacilityAddress != null && gpFacilityAddress.getValue() != null
+					? gpFacilityAddress.getPropertyValue()
+					: "";
 		}
 		Text facilityAddressDetails = new Text(addressText);
-		
+
 		Paragraph logoSection = new Paragraph();
 		logoSection.setFontSize(14);
 		if (logoImage != null) {
@@ -514,55 +533,66 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		logoSection.setFont(timesRoman).setBold();
 
 		Paragraph addressSection = new Paragraph();
-		addressSection.add(facilityAddressDetails).setTextAlignment(TextAlignment.CENTER).setFont(helvetica).setFontSize(12);
+		addressSection.add(facilityAddressDetails).setTextAlignment(TextAlignment.CENTER).setFont(helvetica)
+				.setFontSize(12);
 
-
-		float [] headerColWidth = {2f, 7f};
+		float[] headerColWidth = { 2f, 7f };
 		Table receiptHeader = new Table(headerColWidth);
 		receiptHeader.setWidth(UnitValue.createPercentValue(100f));
 
-		receiptHeader.addCell(new Paragraph("Date:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(billDateLabel.getText())).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
+		receiptHeader.addCell(new Paragraph("Date:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT)
+				.setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph(billDateLabel.getText())).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Receipt No:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(bill.getReceiptNumber())).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
+		receiptHeader.addCell(new Paragraph("Receipt No:")).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph(bill.getReceiptNumber())).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Patient:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(WordUtils.capitalizeFully(fullName + " (" + patient.getAge() + " Years)"))).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
+		receiptHeader.addCell(new Paragraph("Patient:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT)
+				.setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph(WordUtils.capitalizeFully(fullName + " (" + patient.getAge() + " Years)")))
+				.setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Patient ID:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(openmrsId != null ? openmrsId.getIdentifier().toUpperCase() : "")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
-
+		receiptHeader.addCell(new Paragraph("Patient ID:")).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph(openmrsId != null ? openmrsId.getIdentifier().toUpperCase() : ""))
+				.setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
 		float[] columnWidths = { 1f, 5f, 2f, 2f };
 		Table billLineItemstable = new Table(columnWidths);
 		billLineItemstable.setBorder(Border.NO_BORDER);
 		billLineItemstable.setWidth(UnitValue.createPercentValue(100f));
 
-		billLineItemstable.addCell(new Paragraph("Qty").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT);
-		billLineItemstable.addCell(new Paragraph("Item").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT);
-		billLineItemstable.addCell(new Paragraph("Price")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
-		billLineItemstable.addCell(new Paragraph("Total")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
+		billLineItemstable.addCell(new Paragraph("Qty").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT);
+		billLineItemstable.addCell(new Paragraph("Item").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.LEFT);
+		billLineItemstable.addCell(new Paragraph("Price")).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.RIGHT);
+		billLineItemstable.addCell(new Paragraph("Total")).setFontSize(FONT_SIZE_12)
+				.setTextAlignment(TextAlignment.RIGHT);
 
 		for (BillLineItem item : bill.getLineItems()) {
 			addBillLineItem(item, billLineItemstable, billItemSectionFont);
 		}
 
-		float [] totalColWidth = {1f, 5f, 2f, 2f};
+		float[] totalColWidth = { 1f, 5f, 2f, 2f };
 		Table totalsSection = new Table(totalColWidth);
 		totalsSection.setWidth(UnitValue.createPercentValue(100f));
 
 		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(" "));
-		totalsSection.addCell(new Paragraph("Total")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
-		totalsSection.addCell(new Paragraph(df.format(bill.getTotal()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
-
-
+		totalsSection.addCell(new Paragraph("Total")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT)
+				.setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph(df.format(bill.getTotal()))).setFontSize(10)
+				.setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
 
 		setInnerCellBorder(receiptHeader, Border.NO_BORDER);
 		setInnerCellBorder(billLineItemstable, Border.NO_BORDER);
 
-		float [] paymentColWidth = {1f, 5f, 2f, 2f};
+		float[] paymentColWidth = { 1f, 5f, 2f, 2f };
 		Table paymentSection = new Table(paymentColWidth);
 		paymentSection.setWidth(UnitValue.createPercentValue(100f));
 		paymentSection.addCell(new Paragraph("  "));
@@ -571,22 +601,30 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		paymentSection.addCell(new Paragraph(" "));
 		// append payment rows
 		for (Payment payment : bill.getPayments()) {
-			PaymentAttribute paymentReferenceAttribute = payment.getActiveAttributes().stream().filter(attribute -> attribute.getAttributeType().getUuid().equals(PAYMENT_REFERENCE_ATTRIBUTE)).findFirst().orElse(null);
+			PaymentAttribute paymentReferenceAttribute = payment.getActiveAttributes().stream()
+					.filter(attribute -> attribute.getAttributeType().getUuid().equals(PAYMENT_REFERENCE_ATTRIBUTE))
+					.findFirst().orElse(null);
 			String paymentReferenceCode = "";
 			if (paymentReferenceAttribute != null) {
 				paymentReferenceCode = paymentReferenceAttribute.getValue();
 			}
 			paymentSection.addCell(new Paragraph(" "));
-			paymentSection.addCell(new Paragraph(payment.getInstanceType().getName()).setTextAlignment(TextAlignment.LEFT)).setFontSize(10).setFont(helvetica);
-			paymentSection.addCell(new Paragraph(paymentReferenceCode).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
-			paymentSection.addCell(new Paragraph(df.format(payment.getAmountTendered())).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
+			paymentSection
+					.addCell(new Paragraph(payment.getInstanceType().getName()).setTextAlignment(TextAlignment.LEFT))
+					.setFontSize(10).setFont(helvetica);
+			paymentSection.addCell(new Paragraph(paymentReferenceCode).setTextAlignment(TextAlignment.RIGHT))
+					.setFontSize(10).setFont(helvetica);
+			paymentSection
+					.addCell(
+							new Paragraph(df.format(payment.getAmountTendered())).setTextAlignment(TextAlignment.RIGHT))
+					.setFontSize(10).setFont(helvetica);
 		}
 
 		setInnerCellBorder(paymentSection, Border.NO_BORDER);
 		setInnerCellBorder(totalsSection, Border.NO_BORDER);
-		
+
 		// Add deposits section if there are deposits
-		float [] depositColWidth = {1f, 5f, 2f, 2f};
+		float[] depositColWidth = { 1f, 5f, 2f, 2f };
 		Table depositSection = new Table(depositColWidth);
 		BigDecimal totalDeposits = bill.getTotalDeposits();
 		if (totalDeposits.compareTo(BigDecimal.ZERO) > 0) {
@@ -595,11 +633,11 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			depositSection.addCell(new Paragraph("Deposits").setTextAlignment(TextAlignment.LEFT).setBold());
 			depositSection.addCell(new Paragraph(" "));
 			depositSection.addCell(new Paragraph(" "));
-			
+
 			// Get deposit service to fetch deposit details
 			IDepositService depositService = Context.getService(IDepositService.class);
 			List<Deposit> patientDeposits = depositService.getDepositsByPatient(bill.getPatient(), null);
-			
+
 			for (Deposit deposit : patientDeposits) {
 				if (deposit.getTransactions() != null) {
 					for (DepositTransaction transaction : deposit.getTransactions()) {
@@ -608,30 +646,34 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 								transaction.getBillLineItem() != null &&
 								bill.getLineItems().contains(transaction.getBillLineItem())) {
 							depositSection.addCell(new Paragraph(" "));
-							depositSection.addCell(new Paragraph("Deposit: " + deposit.getReferenceNumber()).setTextAlignment(TextAlignment.LEFT)).setFontSize(10).setFont(helvetica);
+							depositSection.addCell(new Paragraph("Deposit: " + deposit.getReferenceNumber())
+									.setTextAlignment(TextAlignment.LEFT)).setFontSize(10).setFont(helvetica);
 							depositSection.addCell(new Paragraph(" "));
-							depositSection.addCell(new Paragraph(df.format(transaction.getAmount())).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
+							depositSection.addCell(new Paragraph(df.format(transaction.getAmount()))
+									.setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
 						}
 					}
 				}
 			}
-			
+
 			setInnerCellBorder(depositSection, Border.NO_BORDER);
 		}
-		
+
 		// Add balance section
-		float [] balanceColWidth = {1f, 5f, 2f, 2f};
+		float[] balanceColWidth = { 1f, 5f, 2f, 2f };
 		Table balanceSection = new Table(balanceColWidth);
 		BigDecimal balance = bill.getBalance();
 		if (balance.compareTo(BigDecimal.ZERO) > 0) {
 			balanceSection.setWidth(UnitValue.createPercentValue(100f));
 			balanceSection.addCell(new Paragraph(" "));
 			balanceSection.addCell(new Paragraph(" "));
-			balanceSection.addCell(new Paragraph("Balance Due")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
-			balanceSection.addCell(new Paragraph(df.format(balance))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+			balanceSection.addCell(new Paragraph("Balance Due")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT)
+					.setFont(helvetica).setBold();
+			balanceSection.addCell(new Paragraph(df.format(balance))).setFontSize(10)
+					.setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
 			setInnerCellBorder(balanceSection, Border.NO_BORDER);
 		}
-		
+
 		doc.add(logoSection);
 		doc.add(addressSection);
 		doc.add(receiptHeader);
@@ -646,15 +688,18 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		doc.add(divider);
 		doc.add(balanceSection);
 		doc.add(divider);
-		doc.add(new Paragraph("You were served by " + bill.getCashier().getName()).setFont(footerSectionFont).setFontSize(8).setTextAlignment(TextAlignment.CENTER));
-		doc.add(new Paragraph("GET WELL SOON").setFont(footerSectionFont).setFontSize(10).setTextAlignment(TextAlignment.CENTER));
+		doc.add(new Paragraph("You were served by " + bill.getCashier().getName()).setFont(footerSectionFont)
+				.setFontSize(8).setTextAlignment(TextAlignment.CENTER));
+		doc.add(new Paragraph("GET WELL SOON").setFont(footerSectionFont).setFontSize(10)
+				.setTextAlignment(TextAlignment.CENTER));
 
 		doc.close();
 		return returnFile;
 	}
 
 	private void addBillLineItem(BillLineItem item, Table table, PdfFont font) {
-		if (item.getPaymentStatus().equals(BillStatus.PENDING)) { // all other statuses mean that the line item's bill is settled
+		if (item.getPaymentStatus().equals(BillStatus.PENDING)) { // all other statuses mean that the line item's bill
+																	// is settled
 			return;
 		}
 		String itemName = "";
@@ -670,10 +715,8 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	}
 
 	private void addFormattedCell(Table table, String cellValue, PdfFont font, TextAlignment alignment) {
-		table.addCell(new Paragraph(cellValue).setTextAlignment(alignment)).setFontSize(12).
-				setTextAlignment(alignment).
-				setBorder(Border.NO_BORDER).
-				setFont(font);
+		table.addCell(new Paragraph(cellValue).setTextAlignment(alignment)).setFontSize(12).setTextAlignment(alignment)
+				.setBorder(Border.NO_BORDER).setFont(font);
 
 	}
 
@@ -692,7 +735,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		if (bill == null) {
 			throw new NullPointerException("The bill must be defined.");
 		}
-		
+
 		bill.closeBill(reason);
 		return super.save(bill);
 	}
@@ -704,13 +747,14 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		if (bill == null) {
 			throw new NullPointerException("The bill must be defined.");
 		}
-		
+
 		bill.reopenBill();
 		return super.save(bill);
 	}
 
 	/**
 	 * Get logo from facility information global property
+	 * 
 	 * @return Image object or null if not found
 	 */
 	private Image getLogoFromFacilityInformation() {
@@ -720,20 +764,9 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 			if (StringUtils.isNotEmpty(facilityInfoJson)) {
 				JsonNode facilityNode = objectMapper.readTree(facilityInfoJson);
-				
-				// First try to use logo data from global property (base64 encoded)
-				String logoData = getJsonValue(facilityNode, "logoData", "");
-				if (StringUtils.isNotEmpty(logoData)) {
-					try {
-						byte[] imageBytes = java.util.Base64.getDecoder().decode(logoData);
-						return new Image(ImageDataFactory.create(imageBytes));
-					} catch (Exception e) {
-						LOG.warn("Failed to decode base64 logo data", e);
-					}
-				}
-				
-				// If no logo data, try to use logo path from global property
-				String logoPath = getJsonValue(facilityNode, "logoPath", "");
+
+				// First, try to use logo path from global property
+				String logoPath = getJsonValue(facilityNode, "logoPath", "img/logo.png");
 				if (StringUtils.isNotEmpty(logoPath)) {
 					try {
 						java.io.File logoFile = new java.io.File(logoPath);
@@ -759,14 +792,26 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 						LOG.warn("Failed to load logo from path: " + logoPath, e);
 					}
 				}
+
+				// If not found, try to use logo data from global property (base64 encoded)
+				String logoData = getJsonValue(facilityNode, "logoData", "");
+				if (StringUtils.isNotEmpty(logoData)) {
+					try {
+						byte[] imageBytes = java.util.Base64.getDecoder().decode(logoData);
+						return new Image(ImageDataFactory.create(imageBytes));
+					} catch (Exception e) {
+						LOG.warn("Failed to decode base64 logo data", e);
+					}
+				}
 			}
 		} catch (Exception e) {
 			LOG.warn("Failed to parse facility information JSON for logo", e);
 		}
 
-		// Fallback to the original hardcoded logo if facility information is not available
+		// Fallback to the original hardcoded logo if facility information is not
+		// available
 		try {
-			URL logoUrl = BillServiceImpl.class.getClassLoader().getResource("img/luqman-logo-black.svg");
+			URL logoUrl = BillServiceImpl.class.getClassLoader().getResource("img/logo.png");
 			if (logoUrl != null) {
 				return new Image(ImageDataFactory.create(logoUrl));
 			}
@@ -786,11 +831,12 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 	/**
 	 * Get facility information from global property
+	 * 
 	 * @return FacilityInfo object with parsed facility information
 	 */
 	private FacilityInfo getFacilityInformation() {
 		FacilityInfo info = new FacilityInfo();
-		
+
 		try {
 			String facilityInfoJson = Context.getAdministrationService()
 					.getGlobalProperty(GP_FACILITY_INFORMATION);
@@ -801,7 +847,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				info.tagline = getJsonValue(facilityNode, "tagline", info.tagline);
 				info.logoPath = getJsonValue(facilityNode, "logoPath", info.logoPath);
 				info.logoData = getJsonValue(facilityNode, "logoData", info.logoData);
-				
+
 				// Parse contacts if present
 				if (facilityNode.has("contacts")) {
 					JsonNode contactsNode = facilityNode.get("contacts");

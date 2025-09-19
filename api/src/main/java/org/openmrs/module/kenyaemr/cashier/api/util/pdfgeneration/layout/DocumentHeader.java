@@ -39,7 +39,7 @@ public class DocumentHeader {
 
     // Design constants
     private static final float HEADER_SPACING = 8f;
-    private static final float LOGO_HEIGHT = 40f;
+    private static final float LOGO_HEIGHT = 50f;
 
     // Instance variables for fluent API
     private FacilityInfo facilityInfo;
@@ -153,7 +153,8 @@ public class DocumentHeader {
         }
 
         // Create the text block (facility name + tagline)
-        String facilityNameText = StringUtils.isNotEmpty(info.facilityName) ? info.facilityName : "Facility Name Not Configured";
+        String facilityNameText = StringUtils.isNotEmpty(info.facilityName) ? info.facilityName
+                : "Facility Name Not Configured";
         Paragraph facilityName = new Paragraph(facilityNameText)
                 .setFontSize(14)
                 .setBold()
@@ -217,45 +218,41 @@ public class DocumentHeader {
 
         Image logo = createCenteredLogo(info);
 
-        // --- Updated layout: two-column table, centered, fixed width ---
-        float[] columnWidths = {1, 3}; // Adjust for logo/text proportions
+        // --- Updated layout: three-column table for cleaner alignment ---
+        float[] columnWidths = { 1, 3, 1 }; // left logo, center text, right spacer
         Table headerTable = new Table(UnitValue.createPercentArray(columnWidths))
-                .setWidth(UnitValue.createPercentValue(60)) // 60% of page width
+                .setWidth(UnitValue.createPercentValue(100)) // full page width
                 .setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER)
-                .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
                 .setPadding(0);
 
-        // Logo cell
+        // Left: Logo
         if (logo != null) {
-            logo.setAutoScale(false);
-            logo.setHeight(logoHeight);
-            logo.setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER);
+            logo.setHeight(50f);
             headerTable.addCell(new com.itextpdf.layout.element.Cell()
                     .add(logo)
                     .setBorder(null)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                    .setTextAlignment(TextAlignment.CENTER)
+                    .setTextAlignment(TextAlignment.LEFT)
                     .setPadding(0)
                     .setMargin(0));
         } else {
             headerTable.addCell(new com.itextpdf.layout.element.Cell()
-                    .add(new Paragraph("LUQMAN-EMR").setFontSize(22).setBold().setTextAlignment(TextAlignment.CENTER))
-                    .setBorder(null)
-                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setPadding(0)
-                    .setMargin(0));
+                    .setBorder(null));
         }
 
-        // Text block cell
+        // Center: Facility name, tagline, and title
         headerTable.addCell(new com.itextpdf.layout.element.Cell()
-                .add(textBlock)
+                .add(textBlock) // already contains name, tagline, title, subtitle
                 .setBorder(null)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setPadding(0)
                 .setMargin(0));
+
+        // Right: empty cell (keeps center aligned)
+        headerTable.addCell(new com.itextpdf.layout.element.Cell()
+                .setBorder(null));
 
         doc.add(headerTable);
 
@@ -318,17 +315,11 @@ public class DocumentHeader {
     private Image createCenteredLogo(FacilityInfo info) {
         try {
             byte[] imageBytes = null;
-            // First try to use logo data from global property (base64 encoded)
-            if (StringUtils.isNotEmpty(info.logoData)) {
+
+            // try to use logo path from global property
+            if (StringUtils.isNotEmpty(info.logoPath)) {
                 try {
-                    imageBytes = java.util.Base64.getDecoder().decode(info.logoData);
-                } catch (Exception e) {
-                    log.warn("Failed to decode base64 logo data", e);
-                }
-            }
-            // If no logo data, try to use logo path from global property
-            if (imageBytes == null && StringUtils.isNotEmpty(info.logoPath)) {
-                try {
+                    log.info("Loading logo from path: " + info.logoPath);
                     java.io.File logoFile = new java.io.File(info.logoPath);
                     if (logoFile.exists()) {
                         imageBytes = java.nio.file.Files.readAllBytes(logoFile.toPath());
@@ -347,6 +338,14 @@ public class DocumentHeader {
                     }
                 } catch (Exception e) {
                     log.warn("Failed to load logo from path: " + info.logoPath, e);
+                }
+            }
+            // If no logo path, try to use logo data from global property (base64 encoded)
+            if (imageBytes == null && StringUtils.isNotEmpty(info.logoData)) {
+                try {
+                    imageBytes = java.util.Base64.getDecoder().decode(info.logoData);
+                } catch (Exception e) {
+                    log.warn("Failed to decode base64 logo data", e);
                 }
             }
 
