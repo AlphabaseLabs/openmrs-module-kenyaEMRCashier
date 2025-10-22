@@ -27,7 +27,7 @@ import java.text.SimpleDateFormat;
 public class BillStatementLetterheadSection implements PdfDocumentService.LetterheadSection {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
-    private static final String OPENMRS_ID = "dfacd928-0370-4315-99d7-6ec1c9f7ae76";
+    private static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 
     // Design constants
     private static final float HEADER_SPACING = 8f;

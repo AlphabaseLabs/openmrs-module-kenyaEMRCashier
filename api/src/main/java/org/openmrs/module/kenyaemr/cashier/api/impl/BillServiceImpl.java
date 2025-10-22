@@ -99,7 +99,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	private static final String GP_FACILITY_ADDRESS_DETAILS = "kenyaemr.cashier.receipt.facilityAddress";
 	private static final String GP_FACILITY_INFORMATION = "kenyaemr.cashier.receipt.facilityInformation";
 	private static final ObjectMapper objectMapper = new ObjectMapper();
-	public static final String OPENMRS_ID = "dfacd928-0370-4315-99d7-6ec1c9f7ae76";
+	public static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 	public static final String PAYMENT_REFERENCE_ATTRIBUTE = "d453e528-0264-4d6e-ae23-bc0b777e1146";
 
 

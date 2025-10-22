@@ -38,7 +38,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
     private static final float TABLE_MARGIN = 8f;
     private static final float SECTION_SPACING = 12f;
     private static final float SUBSECTION_SPACING = 6f;
-    private static final String OPENMRS_ID = "dfacd928-0370-4315-99d7-6ec1c9f7ae76";
+    private static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 
     @Override
     public void render(Document doc, Object data) {
