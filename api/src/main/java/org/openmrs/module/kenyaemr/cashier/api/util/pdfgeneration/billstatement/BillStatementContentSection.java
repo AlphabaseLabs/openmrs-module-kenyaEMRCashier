@@ -227,6 +227,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
 
         // Calculate totals
         BigDecimal totalBillAmount = bill.getTotal();
+        BigDecimal totalActualPayments = bill.getTotalActualPayments();
+        BigDecimal totalWaivers = bill.getTotalWaivers();
         BigDecimal totalPayments = bill.getTotalPayments();
         BigDecimal balanceDue = totalBillAmount.subtract(totalPayments);
 
@@ -234,8 +236,14 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         summaryTable.addCell(createSummaryLabelCell("Total Bill Amount:"));
         summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalBillAmount)));
 
-        summaryTable.addCell(createSummaryLabelCell("Total Payments:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalPayments)));
+        summaryTable.addCell(createSummaryLabelCell("Total Paid:"));
+        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalActualPayments)));
+
+        // Only show waived amount if it's greater than zero
+        if (totalWaivers.compareTo(BigDecimal.ZERO) > 0) {
+            summaryTable.addCell(createSummaryLabelCell("Total Waived:"));
+            summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalWaivers)));
+        }
 
         summaryTable.addCell(createSummaryLabelCell("Balance Due:"));
         summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(balanceDue)));

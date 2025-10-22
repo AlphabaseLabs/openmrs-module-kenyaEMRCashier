@@ -619,6 +619,30 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			setInnerCellBorder(depositSection, Border.NO_BORDER);
 		}
 		
+		// Add payment summary section to distinguish between actual payments and waivers
+		float [] summaryColWidth = {1f, 5f, 2f, 2f};
+		Table paymentSummarySection = new Table(summaryColWidth);
+		paymentSummarySection.setWidth(UnitValue.createPercentValue(100f));
+		
+		BigDecimal totalActualPayments = bill.getTotalActualPayments();
+		BigDecimal totalWaivers = bill.getTotalWaivers();
+		
+		// Add Total Paid line (excluding waivers)
+		paymentSummarySection.addCell(new Paragraph(" "));
+		paymentSummarySection.addCell(new Paragraph(" "));
+		paymentSummarySection.addCell(new Paragraph("Total Paid")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		paymentSummarySection.addCell(new Paragraph(df.format(totalActualPayments))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		
+		// Add Total Waived line (only if there are waivers)
+		if (totalWaivers.compareTo(BigDecimal.ZERO) > 0) {
+			paymentSummarySection.addCell(new Paragraph(" "));
+			paymentSummarySection.addCell(new Paragraph(" "));
+			paymentSummarySection.addCell(new Paragraph("Total Waived")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+			paymentSummarySection.addCell(new Paragraph(df.format(totalWaivers))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		}
+		
+		setInnerCellBorder(paymentSummarySection, Border.NO_BORDER);
+		
 		// Add balance section
 		float [] balanceColWidth = {1f, 5f, 2f, 2f};
 		Table balanceSection = new Table(balanceColWidth);
@@ -643,6 +667,8 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		doc.add(paymentSection);
 		doc.add(divider);
 		doc.add(depositSection);
+		doc.add(divider);
+		doc.add(paymentSummarySection);
 		doc.add(divider);
 		doc.add(balanceSection);
 		doc.add(divider);

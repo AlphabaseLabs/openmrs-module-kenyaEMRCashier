@@ -98,7 +98,10 @@ public class InvoiceLetterheadSection
                 ? new java.text.SimpleDateFormat("dd-MMM-yyyy HH:mm").format(bill.getDateCreated())
                 : "";
         invoiceData.totalAmount = bill.getTotal() != null ? String.format("%.2f", bill.getTotal()) : "0.00";
-        invoiceData.totalPaid = bill.getTotalPayments() != null ? String.format("%.2f", bill.getTotalPayments())
+        // Use actual payments only (excluding waivers)
+        invoiceData.totalPaid = bill.getTotalActualPayments() != null ? String.format("%.2f", bill.getTotalActualPayments())
+                : "0.00";
+        invoiceData.totalWaived = bill.getTotalWaivers() != null ? String.format("%.2f", bill.getTotalWaivers())
                 : "0.00";
         invoiceData.balance = bill.getTotal() != null && bill.getTotalPayments() != null
                 ? String.format("%.2f", bill.getTotal().subtract(bill.getTotalPayments()))
@@ -120,6 +123,7 @@ public class InvoiceLetterheadSection
         invoiceData.dateTime = getMapValue(dataMap, "dateTime", "");
         invoiceData.totalAmount = getMapValue(dataMap, "totalAmount", "");
         invoiceData.totalPaid = getMapValue(dataMap, "totalPaid", "");
+        invoiceData.totalWaived = getMapValue(dataMap, "totalWaived", "0.00");
         invoiceData.balance = getMapValue(dataMap, "balance", "");
         invoiceData.status = getMapValue(dataMap, "status", "");
     }
@@ -139,6 +143,7 @@ public class InvoiceLetterheadSection
         invoiceData.dateTime = jsonData.has("dateTime") ? jsonData.get("dateTime").asText() : "";
         invoiceData.totalAmount = jsonData.has("totalAmount") ? jsonData.get("totalAmount").asText() : "";
         invoiceData.totalPaid = jsonData.has("totalPaid") ? jsonData.get("totalPaid").asText() : "";
+        invoiceData.totalWaived = jsonData.has("totalWaived") ? jsonData.get("totalWaived").asText() : "0.00";
         invoiceData.balance = jsonData.has("balance") ? jsonData.get("balance").asText() : "";
         invoiceData.status = jsonData.has("status") ? jsonData.get("status").asText() : "";
     }
@@ -186,6 +191,17 @@ public class InvoiceLetterheadSection
         cell.add(createInfoLine("Date/Time:", data.dateTime));
         cell.add(createInfoLine("Total Amount:", data.totalAmount));
         cell.add(createInfoLine("Total Paid:", data.totalPaid));
+        
+        // Only show waived amount if it's greater than zero
+        try {
+            double waivedAmount = Double.parseDouble(data.totalWaived);
+            if (waivedAmount > 0) {
+                cell.add(createInfoLine("Total Waived:", data.totalWaived));
+            }
+        } catch (NumberFormatException e) {
+            // If parsing fails, skip showing the waived amount
+        }
+        
         cell.add(createInfoLine("Balance:", data.balance));
         cell.add(createInfoLine("Status:", data.status));
 
@@ -217,6 +233,7 @@ public class InvoiceLetterheadSection
         String dateTime = "";
         String totalAmount = "";
         String totalPaid = "";
+        String totalWaived = "";
         String balance = "";
         String status = "";
     }

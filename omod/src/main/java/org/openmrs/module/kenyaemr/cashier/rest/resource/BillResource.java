@@ -100,6 +100,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("dateClosed");
 			// Add calculated properties for cumulative totals
 			description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.DEFAULT);
+			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"), Representation.DEFAULT);
+			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.DEFAULT);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.DEFAULT);
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.DEFAULT);
 			description.addProperty("balance", findMethod("getBalance"), Representation.DEFAULT);
@@ -123,6 +125,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("dateClosed");
 			// Add calculated properties for cumulative totals
 			description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.FULL);
+			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"), Representation.FULL);
+			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.FULL);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.FULL);
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.FULL);
 			description.addProperty("balance", findMethod("getBalance"), Representation.FULL);
@@ -146,6 +150,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("dateClosed");
 			// Add calculated properties for cumulative totals
 			description.addProperty("totalPayments", findMethod("getTotalPayments"));
+			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"));
+			description.addProperty("totalWaivers", findMethod("getTotalWaivers"));
 			description.addProperty("totalExempted", findMethod("getTotalExempted"));
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"));
 			description.addProperty("balance", findMethod("getBalance"));
@@ -383,6 +389,34 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		}
 		return instance.getPayments().stream()
 				.filter(payment -> !payment.getVoided())
+				.map(Payment::getAmountTendered)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	@PropertyGetter("totalActualPayments")
+	public BigDecimal getTotalActualPayments(Bill instance) {
+		if (instance.getPayments() == null) {
+			return BigDecimal.ZERO;
+		}
+		return instance.getPayments().stream()
+				.filter(payment -> !payment.getVoided())
+				.filter(payment -> payment.getInstanceType() != null && 
+						payment.getInstanceType().getName() != null &&
+						!payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
+				.map(Payment::getAmountTendered)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	@PropertyGetter("totalWaivers")
+	public BigDecimal getTotalWaivers(Bill instance) {
+		if (instance.getPayments() == null) {
+			return BigDecimal.ZERO;
+		}
+		return instance.getPayments().stream()
+				.filter(payment -> !payment.getVoided())
+				.filter(payment -> payment.getInstanceType() != null && 
+						payment.getInstanceType().getName() != null &&
+						payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
 				.map(Payment::getAmountTendered)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}

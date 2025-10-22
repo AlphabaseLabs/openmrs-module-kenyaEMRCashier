@@ -126,7 +126,14 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         cell.add(new Paragraph("BILL SUMMARY").setBold().setFontSize(10).setMarginBottom(4f));
         cell.add(createInfoLine("Status:", bill.getStatus() != null ? bill.getStatus().name() : "UNKNOWN"));
         cell.add(createInfoLine("Total Bill:", CurrencyUtil.formatCurrency(bill.getTotal())));
-        cell.add(createInfoLine("Total Paid:", CurrencyUtil.formatCurrency(bill.getTotalPayments())));
+        // Use actual payments only (excluding waivers)
+        cell.add(createInfoLine("Total Paid:", CurrencyUtil.formatCurrency(bill.getTotalActualPayments())));
+
+        // Only show waived amount if it's greater than zero
+        java.math.BigDecimal totalWaivers = bill.getTotalWaivers();
+        if (totalWaivers.compareTo(java.math.BigDecimal.ZERO) > 0) {
+            cell.add(createInfoLine("Total Waived:", CurrencyUtil.formatCurrency(totalWaivers)));
+        }
 
         // Balance Due
         java.math.BigDecimal balance = bill.getTotal().subtract(bill.getTotalPayments());

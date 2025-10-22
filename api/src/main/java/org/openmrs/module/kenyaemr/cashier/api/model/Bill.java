@@ -101,6 +101,53 @@ public class Bill extends BaseOpenmrsData {
 		return total;
 	}
 
+	/**
+	 * Gets the total amount of actual payments (excluding waivers).
+	 * Waivers are not counted as paid amounts for accounting purposes.
+	 * @return The total actual payments amount (excludes waivers)
+	 */
+	public BigDecimal getTotalActualPayments() {
+		BigDecimal total = BigDecimal.ZERO;
+
+		if (payments != null) {
+			for (Payment payment : payments) {
+				if (payment != null && !payment.getVoided()) {
+					// Skip waivers - they should not be counted as actual payments
+					if (payment.getInstanceType() != null && 
+							payment.getInstanceType().getName() != null &&
+							!payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
+						total = total.add(payment.getAmountTendered());
+					}
+				}
+			}
+		}
+
+		return total;
+	}
+
+	/**
+	 * Gets the total amount of waivers applied to this bill.
+	 * @return The total waived amount
+	 */
+	public BigDecimal getTotalWaivers() {
+		BigDecimal total = BigDecimal.ZERO;
+
+		if (payments != null) {
+			for (Payment payment : payments) {
+				if (payment != null && !payment.getVoided()) {
+					// Only count waivers
+					if (payment.getInstanceType() != null && 
+							payment.getInstanceType().getName() != null &&
+							payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
+						total = total.add(payment.getAmountTendered());
+					}
+				}
+			}
+		}
+
+		return total;
+	}
+
 	public BigDecimal getAmountPaid() {
 		BigDecimal total = getTotal();
 		BigDecimal totalPayments = getTotalPayments();
