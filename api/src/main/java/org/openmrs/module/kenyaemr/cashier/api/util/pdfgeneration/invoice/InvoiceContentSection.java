@@ -54,14 +54,16 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
         itemsTable.addHeaderCell(createHeaderCell("Unit price", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
 
-        // Add bill line items
+        // Add bill line items (exclude voided items)
         int itemNumber = 1;
         for (BillLineItem item : bill.getLineItems()) {
-            itemsTable.addCell(createCenterCell(String.valueOf(itemNumber++)));
-            itemsTable.addCell(createLeftCell(getItemName(item)));
-            itemsTable.addCell(createCenterCell(formatQuantity(item.getQuantity())));
-            itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
-            itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
+            if (item != null && !item.getVoided()) {
+                itemsTable.addCell(createCenterCell(String.valueOf(itemNumber++)));
+                itemsTable.addCell(createLeftCell(getItemName(item)));
+                itemsTable.addCell(createCenterCell(formatQuantity(item.getQuantity())));
+                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
+                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
+            }
         }
 
         doc.add(itemsTable);
@@ -193,17 +195,19 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
         paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(runningBalance)));
         paymentTable.addCell(createLeftCell("-"));
 
-        // Add payment table rows with running balance
+        // Add payment table rows with running balance (exclude voided payments)
         int paymentNumber = 2;
         for (Payment payment : bill.getPayments()) {
-            BigDecimal paymentAmount = payment.getAmountTendered();
-            runningBalance = runningBalance.subtract(paymentAmount);
+            if (payment != null && !payment.getVoided()) {
+                BigDecimal paymentAmount = payment.getAmountTendered();
+                runningBalance = runningBalance.subtract(paymentAmount);
 
-            paymentTable.addCell(createCenterCell(String.valueOf(paymentNumber++)));
-            paymentTable.addCell(createLeftCell(payment.getInstanceType().getName()));
-            paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(paymentAmount)));
-            paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(runningBalance)));
-            paymentTable.addCell(createLeftCell(formatDate(payment.getDateCreated())));
+                paymentTable.addCell(createCenterCell(String.valueOf(paymentNumber++)));
+                paymentTable.addCell(createLeftCell(payment.getInstanceType().getName()));
+                paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(paymentAmount)));
+                paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(runningBalance)));
+                paymentTable.addCell(createLeftCell(formatDate(payment.getDateCreated())));
+            }
         }
 
         doc.add(paymentTable);

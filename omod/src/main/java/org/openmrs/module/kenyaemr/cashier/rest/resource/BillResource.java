@@ -73,7 +73,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {
 		DelegatingResourceDescription description = super.getRepresentationDescription(rep);
-		
+
 		if (rep instanceof RefRepresentation) {
 			// For REF representation, only include basic identifying properties
 			description.addProperty("uuid");
@@ -81,7 +81,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("status");
 			description.addProperty("dateCreated");
 		} else if (rep instanceof DefaultRepresentation) {
-			// For DEFAULT representation, include essential properties with appropriate detail levels
+			// For DEFAULT representation, include essential properties with appropriate
+			// detail levels
 			description.addProperty("adjustedBy", Representation.REF);
 			description.addProperty("billAdjusted", Representation.REF);
 			description.addProperty("cashPoint", Representation.REF);
@@ -100,7 +101,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("dateClosed");
 			// Add calculated properties for cumulative totals
 			description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.DEFAULT);
-			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"), Representation.DEFAULT);
+			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"),
+					Representation.DEFAULT);
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.DEFAULT);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.DEFAULT);
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.DEFAULT);
@@ -131,7 +133,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.FULL);
 			description.addProperty("balance", findMethod("getBalance"), Representation.FULL);
 		} else if (rep instanceof CustomRepresentation) {
-			// For CUSTOM representation, include all properties but let the custom representation handle detail levels
+			// For CUSTOM representation, include all properties but let the custom
+			// representation handle detail levels
 			description.addProperty("adjustedBy");
 			description.addProperty("billAdjusted");
 			description.addProperty("cashPoint");
@@ -156,7 +159,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"));
 			description.addProperty("balance", findMethod("getBalance"));
 		}
-		
+
 		return description;
 	}
 
@@ -170,7 +173,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		if (instance.getLineItems() == null) {
 			instance.setLineItems(new ArrayList<BillLineItem>());
 		}
-		
+
 		// Clear existing line items and add new ones directly
 		// This avoids issues with syncCollection when new items don't have UUIDs yet
 		instance.getLineItems().clear();
@@ -233,6 +236,72 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		}
 	}
 
+	@PropertyGetter("lineItems")
+	public List<BillLineItem> getLineItems(Bill instance) {
+		if (instance.getLineItems() == null) {
+			return new ArrayList<>();
+		}
+
+		// Check the includeVoided parameter from the current HTTP request
+		boolean includeVoided = false;
+		try {
+			org.springframework.web.context.request.ServletRequestAttributes attributes = 
+				(org.springframework.web.context.request.ServletRequestAttributes) 
+				org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+			
+			if (attributes != null) {
+				javax.servlet.http.HttpServletRequest request = attributes.getRequest();
+				String includeVoidedStr = request.getParameter("includeVoided");
+				includeVoided = Strings.isNotEmpty(includeVoidedStr) && Boolean.parseBoolean(includeVoidedStr);
+			}
+		} catch (Exception e) {
+			// If we can't get the request context, default to including all items
+			includeVoided = true;
+		}
+
+		// Filter out voided items if includeVoided is false
+		if (!includeVoided) {
+			return instance.getLineItems().stream()
+					.filter(item -> item == null || !item.getVoided())
+					.collect(java.util.stream.Collectors.toList());
+		}
+
+		return new ArrayList<>(instance.getLineItems());
+	}
+
+	@PropertyGetter("payments")
+	public Set<Payment> getPayments(Bill instance) {
+		if (instance.getPayments() == null) {
+			return new HashSet<>();
+		}
+
+		// Check the includeVoided parameter from the current HTTP request
+		boolean includeVoided = false;
+		try {
+			org.springframework.web.context.request.ServletRequestAttributes attributes = 
+				(org.springframework.web.context.request.ServletRequestAttributes) 
+				org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+			
+			if (attributes != null) {
+				javax.servlet.http.HttpServletRequest request = attributes.getRequest();
+				String includeVoidedStr = request.getParameter("includeVoided");
+				includeVoided = Strings.isNotEmpty(includeVoidedStr) && Boolean.parseBoolean(includeVoidedStr);
+			}
+		} catch (Exception e) {
+			// If we can't get the request context, default to including all items
+			includeVoided = true;
+		}
+
+		// Filter out voided payments if includeVoided is false
+		if (!includeVoided) {
+			return instance.getPayments().stream()
+					.filter(payment -> payment == null || !payment.getVoided())
+					.collect(java.util.stream.Collectors.toSet());
+		}
+
+		return new HashSet<>(instance.getPayments());
+	}
+
 	@Override
 	public Bill save(Bill bill) {
 		// TODO: Test all the ways that this could fail
@@ -285,12 +354,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 				? Boolean.parseBoolean(includeClosedBillsStr)
 				: true;
 
-		String includedVoidedLineItemsStr = context.getRequest().getParameter("includeVoided"); // TODO: rename the
-																								// request param to
-																								// includeVoidedItems
-		boolean includeVoidedLineItems = Strings.isNotEmpty(includedVoidedLineItemsStr)
-				? Boolean.parseBoolean(includedVoidedLineItemsStr)
-				: false;
+		// Note: includeVoided parameter is handled by @PropertyGetter methods during serialization
 
 		Patient patient = Strings.isNotEmpty(patientUuid) ? Context.getPatientService().getPatientByUuid(patientUuid)
 				: null;
@@ -315,14 +379,9 @@ public class BillResource extends BaseRestDataResource<Bill> {
 				.getBills(new BillSearch(searchTemplate, createdOnOrAfterDate, createdOnOrBeforeDate,
 						includeVoidedBills, includeClosedBills));
 
-		// Filter out voided line items if includeVoidedLineItems is false
-		if (!includeVoidedLineItems) {
-			for (Bill bill : result) {
-				if (bill.getLineItems() != null) {
-					bill.getLineItems().removeIf(item -> item != null && item.getVoided());
-				}
-			}
-		}
+		// Note: Filtering of voided line items and payments is now handled by the
+		// @PropertyGetter methods (getLineItems and getPayments) during JSON serialization.
+		// This ensures consistent filtering for both search and individual bill retrieval.
 
 		return new AlreadyPaged<>(context, result, false);
 	}
@@ -400,7 +459,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		}
 		return instance.getPayments().stream()
 				.filter(payment -> !payment.getVoided())
-				.filter(payment -> payment.getInstanceType() != null && 
+				.filter(payment -> payment.getInstanceType() != null &&
 						payment.getInstanceType().getName() != null &&
 						!payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
 				.map(Payment::getAmountTendered)
@@ -414,7 +473,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		}
 		return instance.getPayments().stream()
 				.filter(payment -> !payment.getVoided())
-				.filter(payment -> payment.getInstanceType() != null && 
+				.filter(payment -> payment.getInstanceType() != null &&
 						payment.getInstanceType().getName() != null &&
 						payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
 				.map(Payment::getAmountTendered)

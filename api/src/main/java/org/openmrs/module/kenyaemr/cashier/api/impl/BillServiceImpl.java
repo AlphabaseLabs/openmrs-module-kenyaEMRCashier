@@ -544,8 +544,11 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		billLineItemstable.addCell(new Paragraph("Price")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
 		billLineItemstable.addCell(new Paragraph("Total")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
 
+		// Only include non-voided line items in receipt
 		for (BillLineItem item : bill.getLineItems()) {
-			addBillLineItem(item, billLineItemstable, billItemSectionFont);
+			if (item != null && !item.getVoided()) {
+				addBillLineItem(item, billLineItemstable, billItemSectionFont);
+			}
 		}
 
 		float [] totalColWidth = {1f, 5f, 2f, 2f};
@@ -569,17 +572,19 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		paymentSection.addCell(new Paragraph("Payment").setTextAlignment(TextAlignment.LEFT).setBold());
 		paymentSection.addCell(new Paragraph("Ref No").setTextAlignment(TextAlignment.RIGHT).setBold());
 		paymentSection.addCell(new Paragraph(" "));
-		// append payment rows
+		// append payment rows (exclude voided payments)
 		for (Payment payment : bill.getPayments()) {
-			PaymentAttribute paymentReferenceAttribute = payment.getActiveAttributes().stream().filter(attribute -> attribute.getAttributeType().getUuid().equals(PAYMENT_REFERENCE_ATTRIBUTE)).findFirst().orElse(null);
-			String paymentReferenceCode = "";
-			if (paymentReferenceAttribute != null) {
-				paymentReferenceCode = paymentReferenceAttribute.getValue();
+			if (payment != null && !payment.getVoided()) {
+				PaymentAttribute paymentReferenceAttribute = payment.getActiveAttributes().stream().filter(attribute -> attribute.getAttributeType().getUuid().equals(PAYMENT_REFERENCE_ATTRIBUTE)).findFirst().orElse(null);
+				String paymentReferenceCode = "";
+				if (paymentReferenceAttribute != null) {
+					paymentReferenceCode = paymentReferenceAttribute.getValue();
+				}
+				paymentSection.addCell(new Paragraph(" "));
+				paymentSection.addCell(new Paragraph(payment.getInstanceType().getName()).setTextAlignment(TextAlignment.LEFT)).setFontSize(10).setFont(helvetica);
+				paymentSection.addCell(new Paragraph(paymentReferenceCode).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
+				paymentSection.addCell(new Paragraph(df.format(payment.getAmountTendered())).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
 			}
-			paymentSection.addCell(new Paragraph(" "));
-			paymentSection.addCell(new Paragraph(payment.getInstanceType().getName()).setTextAlignment(TextAlignment.LEFT)).setFontSize(10).setFont(helvetica);
-			paymentSection.addCell(new Paragraph(paymentReferenceCode).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
-			paymentSection.addCell(new Paragraph(df.format(payment.getAmountTendered())).setTextAlignment(TextAlignment.RIGHT)).setFontSize(10).setFont(helvetica);
 		}
 
 		setInnerCellBorder(paymentSection, Border.NO_BORDER);
