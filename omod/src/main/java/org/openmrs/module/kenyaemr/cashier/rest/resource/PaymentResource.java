@@ -155,6 +155,8 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		IBillService service = Context.getService(IBillService.class);
 		Bill bill = delegate.getBill();
 		bill.addPayment(delegate);
+		// Synchronize the bill status based on the current payments and deposits
+		bill.synchronizeBillStatus();
 		service.save(bill);
 
 		return delegate;
