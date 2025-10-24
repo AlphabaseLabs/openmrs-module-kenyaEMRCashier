@@ -44,8 +44,8 @@ import java.util.Set;
 /**
  * REST resource representing a {@link Payment}.
  */
-@SubResource(parent = BillResource.class, path = "payment", supportedClass = Payment.class,
-        supportedOpenmrsVersions = { "2.0 - 2.*" })
+@SubResource(parent = BillResource.class, path = "payment", supportedClass = Payment.class, supportedOpenmrsVersions = {
+		"2.0 - 2.*" })
 public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillResource> {
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {
@@ -77,7 +77,8 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		return description;
 	}
 
-	// Work around TypeVariable issue on base generic property (BaseCustomizableInstanceData.getInstanceType)
+	// Work around TypeVariable issue on base generic property
+	// (BaseCustomizableInstanceData.getInstanceType)
 	@PropertySetter("instanceType")
 	public void setPaymentMode(Payment instance, String uuid) {
 		IPaymentModeService service = Context.getService(IPaymentModeService.class);
@@ -89,9 +90,10 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 
 		instance.setInstanceType(mode);
 	}
+
 	@PropertySetter("item")
 	public void setStockItem(Payment instance, String uuid) {
-		StockItem stockItem =  Context.getService(StockManagementService.class).getStockItemByUuid(uuid) ;
+		StockItem stockItem = Context.getService(StockManagementService.class).getStockItemByUuid(uuid);
 		instance.setItem(stockItem);
 	}
 
@@ -113,7 +115,7 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		double amount;
 		if (price instanceof Integer) {
 			int rawAmount = (Integer) price;
-			amount = Double.valueOf(rawAmount) ;
+			amount = Double.valueOf(rawAmount);
 			instance.setAmount(BigDecimal.valueOf(amount));
 		} else {
 			instance.setAmount(BigDecimal.valueOf((Double) price));
@@ -126,7 +128,7 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		double amount;
 		if (price instanceof Integer) {
 			int rawAmount = (Integer) price;
-			amount = Double.valueOf(rawAmount) ;
+			amount = Double.valueOf(rawAmount);
 			instance.setAmountTendered(BigDecimal.valueOf(amount));
 		} else {
 			instance.setAmountTendered(BigDecimal.valueOf((Double) price));
@@ -136,6 +138,16 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	@PropertyGetter("dateCreated")
 	public Long getPaymentDate(Payment instance) {
 		return instance.getDateCreated().getTime();
+	}
+
+	@PropertySetter("dateCreated")
+	public void setPaymentDate(Payment instance, Object date) {
+		if (date instanceof Long) {
+			instance.setDateCreated(new java.util.Date((Long) date));
+		} else if (date instanceof java.util.Date) {
+			instance.setDateCreated((java.util.Date) date);
+		}
+		// If null or other type, let it pass (will use default)
 	}
 
 	@Override

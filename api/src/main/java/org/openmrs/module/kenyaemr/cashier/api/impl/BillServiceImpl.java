@@ -116,6 +116,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 	/**
 	 * Validates payment attributes to ensure no duplicate values exist within the same bill for the same attribute type.
+	 * Only validates non-voided payments since voided payments are historical records.
 	 * @param bill The bill to validate
 	 */
 	private void validatePaymentAttributes(Bill bill) {
@@ -123,10 +124,16 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			return;
 		}
 
-		// Track attribute values per attribute type across all payments in the bill
+		// Track attribute values per attribute type across all NON-VOIDED payments in the bill
 		Map<String, Set<String>> attributeTypeValues = new HashMap<>();
 		
 		for (Payment payment : bill.getPayments()) {
+			// CRITICAL FIX: Skip voided payments - they are historical records and should not be validated
+			// Voided payments may have attributes that conflict with new payments, but that's acceptable
+			if (payment.getVoided()) {
+				continue;
+			}
+			
 			if (payment.getAttributes() != null) {
 				for (PaymentAttribute attribute : payment.getAttributes()) {
 					if (attribute.getAttributeType() != null && StringUtils.isNotBlank(attribute.getValue())) {
