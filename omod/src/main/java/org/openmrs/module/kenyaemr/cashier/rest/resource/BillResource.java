@@ -543,25 +543,4 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		return totalBillAmount.subtract(totalPayments).subtract(totalDeposits);
 	}
 
-	/**
-	 * Custom operation to synchronize bill status based on payments and deposits.
-	 * Can be called via: POST /ws/rest/v1/cashier/bill/{uuid}?op=sync
-	 * @param billUuid The UUID of the bill to synchronize
-	 * @return The synchronized bill
-	 */
-	public Bill syncBillStatus(String billUuid) {
-		IBillService service = Context.getService(IBillService.class);
-		Bill bill = service.getByUuid(billUuid);
-		
-		if (bill == null) {
-			throw new IllegalArgumentException("Bill with UUID " + billUuid + " not found");
-		}
-		
-		// Synchronize the status based on current payments and deposits
-		bill.synchronizeBillStatus();
-		
-		// Save the bill with updated status
-		return service.save(bill);
-	}
-
 }

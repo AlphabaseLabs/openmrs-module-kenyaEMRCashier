@@ -196,7 +196,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 		// If the bill has an ID, it's an update operation - save it directly
 		if (bill.getId() != null) {
-			LOG.info("Updating existing bill: " + bill.getReceiptNumber() + " with ID: " + bill.getId());
+			LOG.info("Updating existing bill: " + bill.getReceiptNumber() + " with ID: " + bill.getId() + " and status: " + bill.getStatus());
 			return super.save(bill);
 		}
 
