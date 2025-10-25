@@ -35,8 +35,8 @@ public class InvoiceLetterheadSection
     private void createInvoiceHeader(Document doc, Object data) {
         InvoiceData invoiceData = extractInvoiceData(data);
 
-        // Create a table for patient info and invoice summary
-        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 1.2f, 2f }))
+        // Create a table for patient info and invoice summary (normalized to percentages)
+        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 37f, 63f })) // Total: 100
                 .setWidth(UnitValue.createPercentValue(100))
                 .setMarginTop(CONTENT_SPACING)
                 .setMarginBottom(HEADER_SPACING);

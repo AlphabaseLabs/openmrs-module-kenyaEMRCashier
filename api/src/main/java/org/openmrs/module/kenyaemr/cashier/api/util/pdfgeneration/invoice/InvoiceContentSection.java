@@ -15,7 +15,8 @@ import org.openmrs.module.kenyaemr.cashier.api.util.CurrencyUtil;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 
-public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.ContentSection {
+public class InvoiceContentSection
+        implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.ContentSection {
 
     private static final DecimalFormat CURRENCY_FORMAT = new DecimalFormat("#,##0.00");
     private static final float TABLE_MARGIN = 8f;
@@ -39,8 +40,8 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
      * Create minimalist bill line items table
      */
     private void createBillItemsTable(Document doc, Bill bill) {
-        // Optimized column widths for better space utilization
-        float[] itemColWidths = { 0.8f, 6f, 1.5f, 2f, 2f };
+        // Optimized column widths for better space utilization (normalized to reasonable proportions)
+        float[] itemColWidths = { 6f, 49f, 12f, 16f, 16f }; // Total: 99 (effectively percentages)
         Table itemsTable = new Table(UnitValue.createPercentArray(itemColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN)
@@ -172,8 +173,8 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
     }
 
     private void createPaymentTable(Document doc, Bill bill) {
-        // Create payment table with running balance
-        Table paymentTable = new Table(UnitValue.createPercentArray(new float[] { 0.5f, 2f, 1.5f, 1.5f, 1.5f }))
+        // Create payment table with running balance (normalized to percentages)
+        Table paymentTable = new Table(UnitValue.createPercentArray(new float[] { 7f, 28f, 21f, 21f, 21f })) // Total: 98
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN);
 
@@ -189,11 +190,11 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
         BigDecimal runningBalance = totalBillAmount;
 
         // Add initial balance row
-        paymentTable.addCell(createCenterCell("1"));
-        paymentTable.addCell(createLeftCell("Bill Total"));
-        paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(totalBillAmount)));
-        paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(runningBalance)));
-        paymentTable.addCell(createLeftCell("-"));
+        // paymentTable.addCell(createCenterCell("1"));
+        // paymentTable.addCell(createLeftCell("Bill Total"));
+        // paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(totalBillAmount)));
+        // paymentTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(runningBalance)));
+        // paymentTable.addCell(createLeftCell("-"));
 
         // Add payment table rows with running balance (exclude voided payments)
         int paymentNumber = 2;
@@ -233,7 +234,7 @@ public class InvoiceContentSection implements org.openmrs.module.kenyaemr.cashie
      */
     private void createBalanceSummary(Document doc, BigDecimal remainingBalance) {
         doc.add(new Paragraph(" ").setMarginBottom(SUMMARY_SPACING));
-        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 3f, 1f }))
+        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 75f, 25f })) // Total: 100
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN);
 

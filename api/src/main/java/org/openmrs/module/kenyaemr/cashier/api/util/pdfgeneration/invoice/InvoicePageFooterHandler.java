@@ -11,7 +11,7 @@ public class InvoicePageFooterHandler implements org.openmrs.module.kenyaemr.cas
     public InvoicePageFooterHandler() {
         PageFooterHandler.FooterConfig footerConfig = new PageFooterHandler.FooterConfig()
                 .setCustomFooterText("This invoice is computer-generated and valid without signature.")
-                .setPaymentTerms("Payment due within 30 days of invoice date.")
+                .setPaymentTerms("")  // Remove facility name and payment terms line
                 .setThankYouMessage("and get well soon. For billing inquiries, contact our finance department.");
 
         this.pageFooterHandler = new PageFooterHandler(footerConfig);
