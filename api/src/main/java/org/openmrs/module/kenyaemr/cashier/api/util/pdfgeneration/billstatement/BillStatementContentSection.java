@@ -38,7 +38,6 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
     private static final float TABLE_MARGIN = 8f;
     private static final float SECTION_SPACING = 12f;
     private static final float SUBSECTION_SPACING = 6f;
-    private static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 
     @Override
     public void render(Document doc, Object data) {
@@ -87,8 +86,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 .setTextAlignment(TextAlignment.LEFT)
                 .setMarginBottom(SUBSECTION_SPACING));
 
-        // Optimized column widths for detailed information
-        float[] itemColWidths = { 0.5f, 4f, 1f, 1.5f, 1.5f, 2f };
+        // Optimized column widths for detailed information (normalized to percentages)
+        float[] itemColWidths = { 5f, 37f, 9f, 14f, 14f, 19f }; // Total: 98
         Table itemsTable = new Table(UnitValue.createPercentArray(itemColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN)
@@ -127,8 +126,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                     itemsTable.addCell(createCenterCell(String.valueOf(itemNumber++)));
                     itemsTable.addCell(createLeftCell(getItemDescription(item)));
                     itemsTable.addCell(createCenterCell(String.valueOf(item.getQuantity())));
-                                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
-            itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
+                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
+                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
 
                     // Date added with time
                     String dateAdded = item.getDateCreated() != null ? SHORT_DATE_FORMAT.format(item.getDateCreated())
@@ -160,8 +159,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
             return;
         }
 
-        // Payment table - ensure columns span full width
-        float[] paymentColWidths = { 0.8f, 2.2f, 2.2f, 2.2f, 2.2f, 2.2f, 1.8f };
+        // Payment table - ensure columns span full width (normalized to percentages)
+        float[] paymentColWidths = { 6f, 16f, 16f, 16f, 16f, 16f, 13f }; // Total: 99
         Table paymentTable = new Table(UnitValue.createPercentArray(paymentColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN);
@@ -196,8 +195,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 // Amount applied
                 paymentTable.addCell(createRightCell(CurrencyUtil.formatCurrency(payment.getAmount())));
 
-                // Cashier
-                String cashier = payment.getCreator() != null ? payment.getCreator().getDisplayString() : "N/A";
+                String cashier = getCashierDisplay(payment);
                 paymentTable.addCell(createCenterCell(cashier));
 
                 // Reference number
@@ -219,8 +217,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 .setTextAlignment(TextAlignment.LEFT)
                 .setMarginBottom(SUBSECTION_SPACING));
 
-        // Summary table with formatting
-        float[] summaryColWidths = { 3f, 2f };
+        // Summary table with formatting (normalized to percentages)
+        float[] summaryColWidths = { 60f, 40f }; // Total: 100
         Table summaryTable = new Table(UnitValue.createPercentArray(summaryColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN);
@@ -343,13 +341,58 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
 
     private String getPaymentReference(Payment payment) {
         Set<PaymentAttribute> attributes = payment.getAttributes();
-        if (attributes != null) {
+        if (attributes != null && !attributes.isEmpty()) {
+            // Just grab the first attribute value (value_reference column)
             for (PaymentAttribute attr : attributes) {
-                if ("referenceNumber".equals(attr.getAttributeType().getName())) {
-                    return attr.getValue();
+                if (attr != null && attr.getValue() != null) {
+                    String value = attr.getValue().trim();
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
                 }
             }
         }
+        return "-";
+    }
+
+    /**
+     * Get cashier display name without null values
+     */
+    private String getCashierDisplay(Payment payment) {
+        if (payment == null || payment.getCreator() == null) {
+            return "N/A";
+        }
+
+        org.openmrs.User user = payment.getCreator();
+
+        // Try to get person name first
+        if (user.getPerson() != null && user.getPerson().getPersonName() != null) {
+            String givenName = user.getPerson().getPersonName().getGivenName();
+            String familyName = user.getPerson().getPersonName().getFamilyName();
+
+            if (givenName != null && familyName != null) {
+                return givenName + " " + familyName;
+            } else if (givenName != null) {
+                return givenName;
+            } else if (familyName != null) {
+                return familyName;
+            }
+        }
+
+        // Fallback to username or system id
+        if (user.getUsername() != null && !user.getUsername().isEmpty()) {
+            return user.getUsername();
+        }
+
+        if (user.getSystemId() != null && !user.getSystemId().isEmpty()) {
+            return user.getSystemId();
+        }
+
+        // Last resort - use user ID
+        if (user.getId() != null) {
+            return "User #" + user.getId();
+        }
+
         return "N/A";
     }
 }

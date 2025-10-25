@@ -186,9 +186,11 @@ public class PageFooterHandler {
      */
     private Paragraph createSystemNote(String documentNumber, int pageNumber) {
         String generatedDateTime = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss").format(new Date());
-        String generatedBy = Context.getAuthenticatedUser() != null ? 
+        String generatedBy = Context.getAuthenticatedUser() != null && 
+                Context.getAuthenticatedUser().getUsername() != null ? 
                 Context.getAuthenticatedUser().getUsername() : "system";
-        String generatedByUserId = Context.getAuthenticatedUser() != null ? 
+        String generatedByUserId = Context.getAuthenticatedUser() != null && 
+                Context.getAuthenticatedUser().getId() != null ? 
                 Context.getAuthenticatedUser().getId().toString() : "N/A";
 
         return new Paragraph()

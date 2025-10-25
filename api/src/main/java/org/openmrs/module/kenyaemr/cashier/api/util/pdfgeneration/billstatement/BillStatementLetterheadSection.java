@@ -77,8 +77,8 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         Bill bill = (Bill) data;
         Patient patient = bill.getPatient();
 
-        // Create a table for patient info and bill summary
-        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 1.2f, 2f }))
+        // Create a table for patient info and bill summary (normalized to percentages)
+        Table summaryTable = new Table(UnitValue.createPercentArray(new float[] { 37f, 63f })) // Total: 100
                 .setWidth(UnitValue.createPercentValue(100))
                 .setMarginTop(CONTENT_SPACING)
                 .setMarginBottom(HEADER_SPACING);
