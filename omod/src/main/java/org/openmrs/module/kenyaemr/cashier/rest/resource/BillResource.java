@@ -38,7 +38,10 @@ import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.RoundingUtil;
+import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
+import org.openmrs.module.kenyaemr.cashier.base.resource.AlreadyPagedWithLength;
 import org.openmrs.module.kenyaemr.cashier.base.resource.BaseRestDataResource;
+import org.openmrs.module.kenyaemr.cashier.base.resource.PagingUtil;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierResourceController;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RequestContext;
@@ -354,6 +357,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 				? Boolean.parseBoolean(includeClosedBillsStr)
 				: true;
 
+		// Check if totalCount is requested
+		String totalCountStr = context.getRequest().getParameter("totalCount");
+		boolean requestTotalCount = Strings.isNotEmpty(totalCountStr) && Boolean.parseBoolean(totalCountStr);
+
 		// Note: includeVoided parameter is handled by @PropertyGetter methods during serialization
 
 		Patient patient = Strings.isNotEmpty(patientUuid) ? Context.getPatientService().getPatientByUuid(patientUuid)
@@ -375,15 +382,33 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		searchTemplate.setCashPoint(cashPoint);
 		IBillService service = Context.getService(IBillService.class);
 
+		// Get pagination info from context
+		PagingInfo pagingInfo = null;
+		if (context.getLimit() != null && context.getLimit() > 0) {
+			pagingInfo = PagingUtil.getPagingInfoFromContext(context);
+			// Only load total count if explicitly requested
+			if (!requestTotalCount) {
+				pagingInfo.setLoadRecordCount(false);
+			}
+		}
+
 		List<Bill> result = service
 				.getBills(new BillSearch(searchTemplate, createdOnOrAfterDate, createdOnOrBeforeDate,
-						includeVoidedBills, includeClosedBills));
+						includeVoidedBills, includeClosedBills), pagingInfo);
 
 		// Note: Filtering of voided line items and payments is now handled by the
 		// @PropertyGetter methods (getLineItems and getPayments) during JSON serialization.
 		// This ensures consistent filtering for both search and individual bill retrieval.
 
-		return new AlreadyPaged<>(context, result, false);
+		// Use AlreadyPagedWithLength if we have total count, otherwise use AlreadyPaged
+		if (pagingInfo != null && pagingInfo.getTotalRecordCount() != null) {
+			Boolean hasMoreResults = pagingInfo.hasMoreResults();
+			return new AlreadyPagedWithLength<>(context, result, hasMoreResults != null && hasMoreResults,
+					pagingInfo.getTotalRecordCount());
+		} else {
+			// Fallback to AlreadyPaged if no pagination or total count not available
+			return new AlreadyPaged<>(context, result, false);
+		}
 	}
 
 	@SuppressWarnings("unchecked")
