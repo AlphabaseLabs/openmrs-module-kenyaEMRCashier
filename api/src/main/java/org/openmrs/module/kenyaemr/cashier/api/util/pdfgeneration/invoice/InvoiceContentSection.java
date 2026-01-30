@@ -41,7 +41,7 @@ public class InvoiceContentSection
      */
     private void createBillItemsTable(Document doc, Bill bill) {
         // Optimized column widths for better space utilization (normalized to reasonable proportions)
-        float[] itemColWidths = { 6f, 49f, 12f, 16f, 16f }; // Total: 99 (effectively percentages)
+        float[] itemColWidths = { 5f, 38f, 8f, 12f, 12f, 12f, 13f }; // Total: 100
         Table itemsTable = new Table(UnitValue.createPercentArray(itemColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN)
@@ -53,6 +53,8 @@ public class InvoiceContentSection
         itemsTable.addHeaderCell(createHeaderCell("Chargeable service/Item", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Quantity"));
         itemsTable.addHeaderCell(createHeaderCell("Unit price", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Discount", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Tax", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
 
         // Add bill line items (exclude voided items)
@@ -63,7 +65,9 @@ public class InvoiceContentSection
                 itemsTable.addCell(createLeftCell(getItemName(item)));
                 itemsTable.addCell(createCenterCell(formatQuantity(item.getQuantity())));
                 itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
-                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
+                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalDiscount())));
+                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalTax())));
+                itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getNetTotal())));
             }
         }
 
@@ -75,12 +79,30 @@ public class InvoiceContentSection
      */
     private void createTableSummary(Document doc, Bill bill) {
         // Simple total summary aligned to the right
+        Paragraph subtotalSummary = new Paragraph("Subtotal: " + CurrencyUtil.formatCurrency(bill.getSubTotal()))
+                .setBold()
+                .setFontSize(10)
+                .setTextAlignment(TextAlignment.RIGHT)
+                .setMarginBottom(SUMMARY_SPACING);
+        Paragraph discountSummary = new Paragraph("Total Discount: " + CurrencyUtil.formatCurrency(bill.getTotalDiscount()))
+                .setBold()
+                .setFontSize(10)
+                .setTextAlignment(TextAlignment.RIGHT)
+                .setMarginBottom(SUMMARY_SPACING);
+        Paragraph taxSummary = new Paragraph("Total Tax: " + CurrencyUtil.formatCurrency(bill.getTotalTax()))
+                .setBold()
+                .setFontSize(10)
+                .setTextAlignment(TextAlignment.RIGHT)
+                .setMarginBottom(SUMMARY_SPACING);
         Paragraph totalSummary = new Paragraph("Total: " + CurrencyUtil.formatCurrency(bill.getTotal()))
                 .setBold()
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setMarginBottom(SUMMARY_SPACING);
 
+        doc.add(subtotalSummary);
+        doc.add(discountSummary);
+        doc.add(taxSummary);
         doc.add(totalSummary);
 
         // Add minimal spacing after summary
@@ -187,7 +209,8 @@ public class InvoiceContentSection
 
         // Calculate running balance
         BigDecimal totalBillAmount = bill.getTotal();
-        BigDecimal runningBalance = totalBillAmount;
+        BigDecimal totalDeposits = bill.getTotalDeposits();
+        BigDecimal runningBalance = totalBillAmount.subtract(totalDeposits);
 
         // Add initial balance row
         // paymentTable.addCell(createCenterCell("1"));
@@ -214,7 +237,7 @@ public class InvoiceContentSection
         doc.add(paymentTable);
 
         if (!bill.getPayments().isEmpty()) {
-            createBalanceSummary(doc, runningBalance);
+            createBalanceSummary(doc, bill.getBalance());
         }
     }
 

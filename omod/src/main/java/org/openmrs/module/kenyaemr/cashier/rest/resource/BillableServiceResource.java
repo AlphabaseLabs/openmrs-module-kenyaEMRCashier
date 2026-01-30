@@ -4,6 +4,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.openmrs.Concept;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.IBillableItemsService;
+import org.openmrs.module.kenyaemr.cashier.api.ICashierTaxTypeService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.IEntityDataService;
 import org.openmrs.module.kenyaemr.cashier.api.model.*;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
@@ -32,6 +33,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
+import java.math.BigDecimal;
 import java.util.*;
 import org.openmrs.Drug;
 
@@ -312,6 +314,7 @@ public class BillableServiceResource extends BaseRestDataResource<BillableServic
             description.addProperty("serviceStatus");
             description.addProperty("stockItem", Representation.REF);
             description.addProperty("servicePrices", Representation.REF);
+            description.addProperty("serviceTaxes");
             description.addSelfLink();
             return description;
         } else if (rep instanceof FullRepresentation) {
@@ -323,6 +326,7 @@ public class BillableServiceResource extends BaseRestDataResource<BillableServic
             description.addProperty("serviceStatus");
             description.addProperty("stockItem", Representation.DEFAULT);
             description.addProperty("servicePrices", Representation.DEFAULT);
+            description.addProperty("serviceTaxes");
             description.addProperty("auditInfo");
             description.addSelfLink();
             return description;
@@ -395,6 +399,30 @@ public class BillableServiceResource extends BaseRestDataResource<BillableServic
         return safeToList(instance.getServicePrices());
     }
 
+    @PropertyGetter("serviceTaxes")
+    public List<SimpleObject> getServiceTaxes(BillableService instance) {
+        List<SimpleObject> taxes = new ArrayList<>();
+        for (BillableServiceTax tax : safeToList(instance.getServiceTaxes())) {
+            SimpleObject taxObj = new SimpleObject();
+            taxObj.put("uuid", tax.getUuid());
+            taxObj.put("overrideRate", tax.getOverrideRate());
+            taxObj.put("priority", tax.getPriority());
+
+            CashierTaxType taxType = tax.getTaxType();
+            if (taxType != null) {
+                taxObj.put("rate", taxType.getRate());
+                taxObj.put("inclusive", taxType.getInclusive());
+                if (taxType.getConcept() != null) {
+                    taxObj.put("concept", taxType.getConcept().getUuid());
+                    taxObj.put("conceptDisplay", taxType.getConcept().getName(Context.getLocale()));
+                }
+            }
+
+            taxes.add(taxObj);
+        }
+        return taxes;
+    }
+
     /**
      * Sets service prices for billable service
      * 
@@ -411,6 +439,49 @@ public class BillableServiceResource extends BaseRestDataResource<BillableServic
 
         for (CashierItemPrice itemPrice : instance.getServicePrices()) {
             itemPrice.setBillableService(instance);
+        }
+    }
+
+    @PropertySetter("serviceTaxes")
+    public void setServiceTaxes(BillableService instance, List<Map<String, Object>> taxes) {
+        if (taxes == null) {
+            instance.setServiceTaxes(new ArrayList<>());
+            return;
+        }
+
+        List<BillableServiceTax> mappedTaxes = new ArrayList<>(taxes.size());
+        ICashierTaxTypeService taxTypeService = Context.getService(ICashierTaxTypeService.class);
+
+        for (Map<String, Object> taxMap : taxes) {
+            if (taxMap == null) {
+                continue;
+            }
+
+            String conceptUuid = extractUuid(taxMap.get("concept"));
+            CashierTaxType taxType = conceptUuid == null ? null : taxTypeService.getByConceptUuid(conceptUuid);
+
+            if (taxType == null) {
+                throw new IllegalArgumentException("Missing or invalid tax concept for serviceTaxes");
+            }
+
+            BillableServiceTax tax = new BillableServiceTax();
+            tax.setTaxType(taxType);
+            tax.setBillableService(instance);
+            tax.setOverrideRate(parseBigDecimal(taxMap.get("overrideRate")));
+            if (tax.getOverrideRate() == null) {
+                tax.setOverrideRate(parseBigDecimal(taxMap.get("rate")));
+            }
+            tax.setPriority(parseInteger(taxMap.get("priority")));
+            mappedTaxes.add(tax);
+        }
+
+        if (instance.getServiceTaxes() == null) {
+            instance.setServiceTaxes(new ArrayList<>(mappedTaxes.size()));
+        }
+
+        BaseRestDataResource.syncCollection(instance.getServiceTaxes(), mappedTaxes);
+        for (BillableServiceTax tax : instance.getServiceTaxes()) {
+            tax.setBillableService(instance);
         }
     }
 
@@ -473,9 +544,46 @@ public class BillableServiceResource extends BaseRestDataResource<BillableServic
         description.addProperty("serviceType");
         description.addProperty("serviceCategory");
         description.addProperty("servicePrices");
+        description.addProperty("serviceTaxes");
         description.addProperty("serviceStatus");
         description.addProperty("stockItem");
         return description;
+    }
+
+    private String extractUuid(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        if (value instanceof Map) {
+            Object uuid = ((Map<?, ?>) value).get("uuid");
+            return uuid == null ? null : uuid.toString();
+        }
+        return null;
+    }
+
+    private BigDecimal parseBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value.toString());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Invalid decimal value for serviceTaxes", ex);
+        }
+    }
+
+    private Integer parseInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.toString());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Invalid integer value for serviceTaxes", ex);
+        }
     }
 
     /**

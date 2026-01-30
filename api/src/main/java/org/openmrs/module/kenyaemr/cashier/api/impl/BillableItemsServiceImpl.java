@@ -5,12 +5,13 @@ import org.openmrs.module.kenyaemr.cashier.api.IBillableItemsService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataServiceImpl;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
 import org.openmrs.module.kenyaemr.cashier.api.base.f.Action1;
-import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillableService;
-import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
+import org.openmrs.OpenmrsObject;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 @Transactional
@@ -35,6 +36,21 @@ public class BillableItemsServiceImpl extends BaseEntityDataServiceImpl<Billable
     @Override
     protected void validate(BillableService object) {
 
+    }
+
+    @Override
+    protected Collection<? extends OpenmrsObject> getRelatedObjects(BillableService entity) {
+        List<OpenmrsObject> related = new ArrayList<>();
+        if (entity == null) {
+            return related;
+        }
+        if (entity.getServicePrices() != null) {
+            related.addAll(entity.getServicePrices());
+        }
+        if (entity.getServiceTaxes() != null) {
+            related.addAll(entity.getServiceTaxes());
+        }
+        return related;
     }
 
     @Override

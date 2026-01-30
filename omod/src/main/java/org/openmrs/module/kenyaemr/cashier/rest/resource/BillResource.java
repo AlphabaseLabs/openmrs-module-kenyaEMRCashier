@@ -14,6 +14,8 @@
 package org.openmrs.module.kenyaemr.cashier.rest.resource;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.logging.log4j.util.Strings;
 import org.openmrs.Patient;
 import org.openmrs.Provider;
@@ -23,20 +25,28 @@ import org.openmrs.api.ProviderService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.ModuleSettings;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
+import org.openmrs.module.kenyaemr.cashier.api.IBillableItemsService;
 import org.openmrs.module.kenyaemr.cashier.api.ICashPointService;
 import org.openmrs.module.kenyaemr.cashier.api.ITimesheetService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.IEntityDataService;
 import org.openmrs.module.kenyaemr.cashier.api.IDepositService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillableServiceTax;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillStatus;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillableService;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillableServiceStatus;
+import org.openmrs.module.kenyaemr.cashier.api.model.CashierTaxType;
 import org.openmrs.module.kenyaemr.cashier.api.model.CashPoint;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.model.Timesheet;
 import org.openmrs.module.kenyaemr.cashier.api.model.Deposit;
 import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
+import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.RoundingUtil;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
 import org.openmrs.module.kenyaemr.cashier.base.resource.AlreadyPagedWithLength;
@@ -60,12 +70,15 @@ import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingResourceD
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * REST resource representing a {@link Bill}.
@@ -73,6 +86,8 @@ import java.util.Set;
 @Resource(name = RestConstants.VERSION_1 + CashierResourceController.KENYAEMR_CASHIER_NAMESPACE
 		+ "/bill", supportedClass = Bill.class, supportedOpenmrsVersions = { "2.0 - 2.*" })
 public class BillResource extends BaseRestDataResource<Bill> {
+	private static final Log LOG = LogFactory.getLog(BillResource.class);
+
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {
 		DelegatingResourceDescription description = super.getRepresentationDescription(rep);
@@ -109,6 +124,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.DEFAULT);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.DEFAULT);
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.DEFAULT);
+			description.addProperty("total", findMethod("getTotal"), Representation.DEFAULT);
+			description.addProperty("subTotal", findMethod("getSubTotal"), Representation.DEFAULT);
+			description.addProperty("totalDiscount", findMethod("getTotalDiscount"), Representation.DEFAULT);
+			description.addProperty("totalTax", findMethod("getTotalTax"), Representation.DEFAULT);
 			description.addProperty("balance", findMethod("getBalance"), Representation.DEFAULT);
 		} else if (rep instanceof FullRepresentation) {
 			// For FULL representation, include all properties with maximum detail
@@ -134,6 +153,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.FULL);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.FULL);
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"), Representation.FULL);
+			description.addProperty("total", findMethod("getTotal"), Representation.FULL);
+			description.addProperty("subTotal", findMethod("getSubTotal"), Representation.FULL);
+			description.addProperty("totalDiscount", findMethod("getTotalDiscount"), Representation.FULL);
+			description.addProperty("totalTax", findMethod("getTotalTax"), Representation.FULL);
 			description.addProperty("balance", findMethod("getBalance"), Representation.FULL);
 		} else if (rep instanceof CustomRepresentation) {
 			// For CUSTOM representation, include all properties but let the custom
@@ -160,6 +183,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"));
 			description.addProperty("totalExempted", findMethod("getTotalExempted"));
 			description.addProperty("totalDeposits", findMethod("getTotalDeposits"));
+			description.addProperty("total", findMethod("getTotal"));
+			description.addProperty("subTotal", findMethod("getSubTotal"));
+			description.addProperty("totalDiscount", findMethod("getTotalDiscount"));
+			description.addProperty("totalTax", findMethod("getTotalTax"));
 			description.addProperty("balance", findMethod("getBalance"));
 		}
 
@@ -196,22 +223,229 @@ public class BillResource extends BaseRestDataResource<Bill> {
 						item.setPaymentStatus(BillStatus.PENDING);
 					}
 
+					applyTaxes(item);
 					item.setBill(instance);
+					if (item.getAdjustments() != null) {
+						for (BillLineItemAdjustment adjustment : item.getAdjustments()) {
+							if (adjustment != null) {
+								adjustment.setBillLineItem(item);
+							}
+						}
+					}
 					instance.getLineItems().add(item);
 				}
 			}
 		}
 	}
 
+	private void applyTaxes(BillLineItem item) {
+		if (item == null) {
+			LOG.info("applyTaxes: item is null, skipping");
+			return;
+		}
+		LOG.info("applyTaxes: processing item uuid=" + item.getUuid() +
+				" billableService=" + (item.getBillableService() != null ? item.getBillableService().getUuid() : "null") +
+				" itemPrice=" + (item.getItemPrice() != null ? item.getItemPrice().getUuid() : "null") +
+				" stockItem=" + (item.getItem() != null ? item.getItem().getUuid() : "null"));
+
+		// Try to resolve billableService from various sources
+		if (item.getBillableService() == null) {
+			// First, try to resolve from itemPrice (CashierItemPrice has billableService reference)
+			if (item.getItemPrice() != null) {
+				BillableService serviceFromPrice = item.getItemPrice().getBillableService();
+				LOG.info("applyTaxes: itemPrice.getBillableService()=" + (serviceFromPrice != null ? serviceFromPrice.getUuid() : "null"));
+				if (serviceFromPrice != null) {
+					// Re-fetch the BillableService to ensure serviceTaxes collection is properly loaded
+					IBillableItemsService billableItemsService = Context.getService(IBillableItemsService.class);
+					BillableService fullService = billableItemsService.getByUuid(serviceFromPrice.getUuid());
+					if (fullService != null) {
+						item.setBillableService(fullService);
+						LOG.info("applyTaxes: resolved billableService from itemPrice (re-fetched)=" + fullService.getUuid());
+					} else {
+						item.setBillableService(serviceFromPrice);
+						LOG.info("applyTaxes: resolved billableService from itemPrice (proxy)=" + serviceFromPrice.getUuid());
+					}
+				}
+			}
+			// Second, try to resolve from stock item
+			if (item.getBillableService() == null && item.getItem() != null) {
+				BillableService service = resolveBillableService(item);
+				if (service != null) {
+					item.setBillableService(service);
+					LOG.info("applyTaxes: resolved billableService from stockItem=" + service.getUuid());
+				} else {
+					LOG.info("applyTaxes: no billableService found for stock item " + item.getItem().getUuid());
+				}
+			}
+		} else {
+			// BillableService is already set, but might be a proxy - re-fetch to ensure serviceTaxes are loaded
+			IBillableItemsService billableItemsService = Context.getService(IBillableItemsService.class);
+			BillableService fullService = billableItemsService.getByUuid(item.getBillableService().getUuid());
+			if (fullService != null) {
+				item.setBillableService(fullService);
+				LOG.info("applyTaxes: re-fetched existing billableService=" + fullService.getUuid());
+			}
+		}
+		if (item.getBillableService() == null) {
+			LOG.info("applyTaxes: billableService is null, skipping tax calculation");
+			return;
+		}
+		if (item.getPrice() == null || item.getQuantity() == null) {
+			LOG.info("applyTaxes: missing price or quantity, skipping. price=" + item.getPrice()
+					+ " quantity=" + item.getQuantity());
+			return;
+		}
+
+		BigDecimal baseAmount = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+		if (baseAmount.compareTo(BigDecimal.ZERO) <= 0) {
+			LOG.info("applyTaxes: baseAmount <= 0, skipping. baseAmount=" + baseAmount);
+			return;
+		}
+
+		List<BillLineItemAdjustment> adjustments = item.getAdjustments();
+		if (adjustments == null) {
+			adjustments = new ArrayList<BillLineItemAdjustment>();
+			item.setAdjustments(adjustments);
+			LOG.info("applyTaxes: created adjustments list");
+		} else {
+			Iterator<BillLineItemAdjustment> iterator = adjustments.iterator();
+			int removed = 0;
+			while (iterator.hasNext()) {
+				BillLineItemAdjustment existing = iterator.next();
+				if (existing != null && "TAX".equalsIgnoreCase(existing.getAdjustmentType())) {
+					iterator.remove();
+					removed++;
+				}
+			}
+			if (removed > 0) {
+				LOG.info("applyTaxes: removed existing TAX adjustments=" + removed);
+			}
+		}
+
+		BigDecimal discountAmount = calculateDiscountAmount(adjustments);
+		BigDecimal taxableAmount = baseAmount.subtract(discountAmount);
+		if (taxableAmount.compareTo(BigDecimal.ZERO) < 0) {
+			taxableAmount = BigDecimal.ZERO;
+		}
+		LOG.info("applyTaxes: baseAmount=" + baseAmount + " discountAmount=" + discountAmount
+				+ " taxableAmount=" + taxableAmount);
+		if (taxableAmount.compareTo(BigDecimal.ZERO) <= 0) {
+			LOG.info("applyTaxes: taxableAmount <= 0, skipping tax generation");
+			return;
+		}
+
+		List<BillableServiceTax> serviceTaxes = item.getBillableService().getServiceTaxes();
+		if (serviceTaxes == null) {
+			LOG.info("applyTaxes: no serviceTaxes for billableService=" + item.getBillableService().getUuid());
+			return;
+		}
+		LOG.info("applyTaxes: serviceTaxes count=" + serviceTaxes.size());
+		for (BillableServiceTax serviceTax : serviceTaxes) {
+			if (serviceTax == null || serviceTax.getVoided()) {
+				LOG.info("applyTaxes: skipping voided or null serviceTax");
+				continue;
+			}
+			CashierTaxType taxType = serviceTax.getTaxType();
+			BigDecimal rate = serviceTax.getOverrideRate() != null ? serviceTax.getOverrideRate()
+					: (taxType == null ? null : taxType.getRate());
+			if (rate == null) {
+				LOG.info("applyTaxes: missing rate for serviceTax id=" + serviceTax.getId());
+				continue;
+			}
+
+			BigDecimal amount = taxableAmount.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+			BillLineItemAdjustment adjustment = new BillLineItemAdjustment();
+			adjustment.setAdjustmentType("TAX");
+			adjustment.setTaxType(taxType);
+			adjustment.setRate(rate);
+			adjustment.setAmount(amount);
+			adjustment.setBaseAmount(taxableAmount);
+			adjustment.setBillLineItem(item);
+			// Set required BaseOpenmrsData fields for Hibernate persistence
+			adjustment.setCreator(Context.getAuthenticatedUser());
+			adjustment.setDateCreated(new Date());
+			adjustment.setVoided(false);
+			adjustment.setUuid(UUID.randomUUID().toString());
+			adjustments.add(adjustment);
+			LOG.info("applyTaxes: added TAX adjustment amount=" + amount + " rate=" + rate + " uuid=" + adjustment.getUuid());
+		}
+	}
+
+	private BigDecimal calculateDiscountAmount(List<BillLineItemAdjustment> adjustments) {
+		BigDecimal discountAmount = BigDecimal.ZERO;
+		if (adjustments == null) {
+			return discountAmount;
+		}
+		for (BillLineItemAdjustment adjustment : adjustments) {
+			if (adjustment == null || adjustment.getVoided()) {
+				continue;
+			}
+			if (!"DISCOUNT".equalsIgnoreCase(adjustment.getAdjustmentType())) {
+				continue;
+			}
+			BigDecimal amount = adjustment.getAmount();
+			if (amount == null && adjustment.getBaseAmount() != null && adjustment.getRate() != null) {
+				amount = adjustment.getBaseAmount().multiply(adjustment.getRate());
+			}
+			if (amount != null) {
+				discountAmount = discountAmount.add(amount);
+			}
+		}
+		return discountAmount;
+	}
+
+	private BillableService resolveBillableService(BillLineItem item) {
+		if (item == null || item.getItem() == null) {
+			return null;
+		}
+		BillableService template = new BillableService();
+		template.setStockItem(item.getItem());
+		template.setServiceStatus(BillableServiceStatus.ENABLED);
+		IBillableItemsService service = Context.getService(IBillableItemsService.class);
+		List<BillableService> results = service.findServices(new BillableServiceSearch(template));
+		return results == null || results.isEmpty() ? null : results.get(0);
+	}
+
 	@PropertySetter("payments")
 	public void setBillPayments(Bill instance, Set<Payment> payments) {
+		if (payments == null) {
+			return;
+		}
+
+		// Ensure payments are linked to this bill before any flush-triggering calls.
+		for (Payment payment : payments) {
+			if (payment != null) {
+				payment.setBill(instance);
+				if (payment.getAttributes() != null) {
+					for (PaymentAttribute attr : payment.getAttributes()) {
+						if (attr != null) {
+							attr.setOwner(payment);
+						}
+					}
+				}
+			}
+		}
+
 		if (instance.getPayments() == null) {
 			instance.setPayments(new HashSet<Payment>(payments.size()));
 		}
 		BaseRestDataResource.syncCollection(instance.getPayments(), payments);
+
 		for (Payment payment : instance.getPayments()) {
-			instance.addPayment(payment);
+			if (payment != null) {
+				payment.setBill(instance);
+				if (payment.getAttributes() != null) {
+					for (PaymentAttribute attr : payment.getAttributes()) {
+						if (attr != null) {
+							attr.setOwner(payment);
+						}
+					}
+				}
+			}
 		}
+
+		// Recompute status once after all payments are linked.
+		instance.synchronizeBillStatus();
 	}
 
 	@PropertySetter("billAdjusted")
@@ -468,104 +702,52 @@ public class BillResource extends BaseRestDataResource<Bill> {
 
 	@PropertyGetter("totalPayments")
 	public BigDecimal getTotalPayments(Bill instance) {
-		if (instance.getPayments() == null) {
-			return BigDecimal.ZERO;
-		}
-		return instance.getPayments().stream()
-				.filter(payment -> !payment.getVoided())
-				.map(Payment::getAmountTendered)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
+		return instance.getTotalPayments();
 	}
 
 	@PropertyGetter("totalActualPayments")
 	public BigDecimal getTotalActualPayments(Bill instance) {
-		if (instance.getPayments() == null) {
-			return BigDecimal.ZERO;
-		}
-		return instance.getPayments().stream()
-				.filter(payment -> !payment.getVoided())
-				.filter(payment -> payment.getInstanceType() != null &&
-						payment.getInstanceType().getName() != null &&
-						!payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
-				.map(Payment::getAmountTendered)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
+		return instance.getTotalActualPayments();
 	}
 
 	@PropertyGetter("totalWaivers")
 	public BigDecimal getTotalWaivers(Bill instance) {
-		if (instance.getPayments() == null) {
-			return BigDecimal.ZERO;
-		}
-		return instance.getPayments().stream()
-				.filter(payment -> !payment.getVoided())
-				.filter(payment -> payment.getInstanceType() != null &&
-						payment.getInstanceType().getName() != null &&
-						payment.getInstanceType().getName().equalsIgnoreCase("Waiver"))
-				.map(Payment::getAmountTendered)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
+		return instance.getTotalWaivers();
 	}
 
 	@PropertyGetter("totalExempted")
 	public BigDecimal getTotalExempted(Bill instance) {
-		if (instance.getLineItems() == null) {
-			return BigDecimal.ZERO;
-		}
-		return instance.getLineItems().stream()
-				.filter(item -> item != null && !item.getVoided() &&
-						item.getPaymentStatus() != null &&
-						item.getPaymentStatus().equals("EXEMPTED") &&
-						item.getPrice() != null)
-				.map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
+		return instance.getTotalExempted();
 	}
 
 	@PropertyGetter("totalDeposits")
 	public BigDecimal getTotalDeposits(Bill instance) {
-		if (instance.getLineItems() == null) {
-			return BigDecimal.ZERO;
-		}
+		return instance.getTotalDeposits();
+	}
 
-		IDepositService depositService = Context.getService(IDepositService.class);
-		BigDecimal totalDeposits = BigDecimal.ZERO;
+	@PropertyGetter("total")
+	public BigDecimal getTotal(Bill instance) {
+		return instance.getTotal();
+	}
 
-		// Get all deposits for the patient
-		List<Deposit> patientDeposits = depositService.getDepositsByPatient(instance.getPatient(), null);
+	@PropertyGetter("subTotal")
+	public BigDecimal getSubTotal(Bill instance) {
+		return instance.getSubTotal();
+	}
 
-		// For each deposit, sum up the transactions that are linked to this bill's line
-		// items
-		for (Deposit deposit : patientDeposits) {
-			if (deposit.getTransactions() != null) {
-				for (DepositTransaction transaction : deposit.getTransactions()) {
-					if (!transaction.getVoided() &&
-							transaction.getTransactionType() == TransactionType.APPLY &&
-							transaction.getBillLineItem() != null &&
-							instance.getLineItems().contains(transaction.getBillLineItem())) {
-						totalDeposits = totalDeposits.add(transaction.getAmount());
-					}
-				}
-			}
-		}
+	@PropertyGetter("totalDiscount")
+	public BigDecimal getTotalDiscount(Bill instance) {
+		return instance.getTotalDiscount();
+	}
 
-		return totalDeposits;
+	@PropertyGetter("totalTax")
+	public BigDecimal getTotalTax(Bill instance) {
+		return instance.getTotalTax();
 	}
 
 	@PropertyGetter("balance")
 	public BigDecimal getBalance(Bill instance) {
-		if (instance.getLineItems() == null) {
-			return BigDecimal.ZERO;
-		}
-
-		BigDecimal totalBillAmount = instance.getLineItems().stream()
-				.filter(item -> item != null && !item.getVoided() &&
-						item.getPrice() != null &&
-						(item.getPaymentStatus() == null || !item.getPaymentStatus().equals("EXEMPTED")))
-				.map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
-
-		BigDecimal totalPayments = getTotalPayments(instance);
-		BigDecimal totalDeposits = getTotalDeposits(instance);
-
-		return totalBillAmount.subtract(totalPayments).subtract(totalDeposits);
+		return instance.getBalance();
 	}
 
 }

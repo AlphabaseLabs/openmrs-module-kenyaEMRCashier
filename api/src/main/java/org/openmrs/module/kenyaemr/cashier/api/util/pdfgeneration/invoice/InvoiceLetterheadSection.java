@@ -103,9 +103,11 @@ public class InvoiceLetterheadSection
                 : "0.00";
         invoiceData.totalWaived = bill.getTotalWaivers() != null ? String.format("%.2f", bill.getTotalWaivers())
                 : "0.00";
-        invoiceData.balance = bill.getTotal() != null && bill.getTotalPayments() != null
-                ? String.format("%.2f", bill.getTotal().subtract(bill.getTotalPayments()))
-                : "0.00";
+        if (bill.getTotal() != null) {
+            invoiceData.balance = String.format("%.2f", bill.getBalance());
+        } else {
+            invoiceData.balance = "0.00";
+        }
         invoiceData.status = bill.getStatus() != null ? bill.getStatus().toString() : "";
     }
 

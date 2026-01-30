@@ -136,7 +136,7 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
         }
 
         // Balance Due
-        java.math.BigDecimal balance = bill.getTotal().subtract(bill.getTotalPayments());
+        java.math.BigDecimal balance = bill.getBalance();
         cell.add(createInfoLine("Balance:", CurrencyUtil.formatCurrency(balance)));
 
         // Cash Point
