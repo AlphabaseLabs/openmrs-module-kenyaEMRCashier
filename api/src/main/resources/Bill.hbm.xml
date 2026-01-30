@@ -32,6 +32,78 @@
 		<property name="uuid" type="java.lang.String" column="uuid" length="38" unique="true" />
 	</class>
 
+	<class name="org.openmrs.module.kenyaemr.cashier.api.model.CashierTaxType" table="cashier_tax_type">
+		<cache usage="read-write"/>
+		<id name="id" type="int" column="tax_type_id">
+			<generator class="native" />
+		</id>
+		<discriminator column="tax_type_id" insert="false" />
+
+		<many-to-one name="concept" class="org.openmrs.Concept" not-null="true" column="concept_id" />
+		<property name="rate" type="java.math.BigDecimal" column="rate" not-null="true" />
+		<property name="inclusive" type="java.lang.Boolean" column="inclusive" not-null="true" />
+
+		<many-to-one name="creator" class="org.openmrs.User" not-null="true" column="creator" />
+		<property name="dateCreated" type="java.util.Date" column="date_created" not-null="true" length="19" />
+		<many-to-one name="changedBy" class="org.openmrs.User" column="changed_by" />
+		<property name="dateChanged" type="java.util.Date" column="date_changed" length="19" />
+		<property name="voided" type="java.lang.Boolean" column="voided" length="1" not-null="true" />
+		<many-to-one name="voidedBy" class="org.openmrs.User" column="voided_by" />
+		<property name="dateVoided" type="java.util.Date" column="date_voided" length="19" />
+		<property name="voidReason" type="java.lang.String" column="void_reason" length="255" />
+		<property name="uuid" type="java.lang.String" column="uuid" length="38" unique="true" />
+	</class>
+
+	<class name="org.openmrs.module.kenyaemr.cashier.api.model.BillableServiceTax" table="cashier_billable_service_tax">
+		<cache usage="read-write"/>
+		<id name="id" type="int" column="service_tax_id">
+			<generator class="native" />
+		</id>
+		<discriminator column="service_tax_id" insert="false" />
+
+		<many-to-one name="billableService" class="org.openmrs.module.kenyaemr.cashier.api.model.BillableService" not-null="true" column="service_id" />
+		<many-to-one name="taxType" class="org.openmrs.module.kenyaemr.cashier.api.model.CashierTaxType" not-null="true" column="tax_type_id" />
+		<property name="overrideRate" type="java.math.BigDecimal" column="override_rate" not-null="false" />
+		<property name="priority" type="java.lang.Integer" column="priority" not-null="false" />
+
+		<many-to-one name="creator" class="org.openmrs.User" not-null="true" column="creator" />
+		<property name="dateCreated" type="java.util.Date" column="date_created" not-null="true" length="19" />
+		<many-to-one name="changedBy" class="org.openmrs.User" column="changed_by" />
+		<property name="dateChanged" type="java.util.Date" column="date_changed" length="19" />
+		<property name="voided" type="java.lang.Boolean" column="voided" length="1" not-null="true" />
+		<many-to-one name="voidedBy" class="org.openmrs.User" column="voided_by" />
+		<property name="dateVoided" type="java.util.Date" column="date_voided" length="19" />
+		<property name="voidReason" type="java.lang.String" column="void_reason" length="255" />
+		<property name="uuid" type="java.lang.String" column="uuid" length="38" unique="true" />
+	</class>
+
+	<class name="org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment" table="cashier_bill_line_item_adjustment">
+		<cache usage="read-write"/>
+		<id name="id" type="int" column="bill_line_item_adjustment_id">
+			<generator class="native" />
+		</id>
+		<discriminator column="bill_line_item_adjustment_id" insert="false" />
+
+		<many-to-one name="billLineItem" class="org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem" not-null="true" column="bill_line_item_id" />
+		<property name="adjustmentType" type="java.lang.String" column="adjustment_type" not-null="true" length="20" />
+		<many-to-one name="taxType" class="org.openmrs.module.kenyaemr.cashier.api.model.CashierTaxType" not-null="false" column="tax_type_id" />
+		<property name="rate" type="java.math.BigDecimal" column="rate" not-null="false" />
+		<property name="amount" type="java.math.BigDecimal" column="amount" not-null="true" />
+		<property name="baseAmount" type="java.math.BigDecimal" column="base_amount" not-null="false" />
+		<property name="description" type="java.lang.String" column="description" length="255" />
+		<many-to-one name="discountSponsor" class="org.openmrs.Provider" not-null="false" column="sponsor_id" />
+
+		<many-to-one name="creator" class="org.openmrs.User" not-null="true" column="creator" />
+		<property name="dateCreated" type="java.util.Date" column="date_created" not-null="true" length="19" />
+		<many-to-one name="changedBy" class="org.openmrs.User" column="changed_by" />
+		<property name="dateChanged" type="java.util.Date" column="date_changed" length="19" />
+		<property name="voided" type="java.lang.Boolean" column="voided" length="1" not-null="true" />
+		<many-to-one name="voidedBy" class="org.openmrs.User" column="voided_by" />
+		<property name="dateVoided" type="java.util.Date" column="date_voided" length="19" />
+		<property name="voidReason" type="java.lang.String" column="void_reason" length="255" />
+		<property name="uuid" type="java.lang.String" column="uuid" length="38" unique="true" />
+	</class>
+
 	<class name="org.openmrs.module.kenyaemr.cashier.api.model.BillableService" table="cashier_billable_service">
 		<cache usage="read-write"/>
 
@@ -53,6 +125,10 @@
 		<bag name="servicePrices" lazy="false" inverse="true" cascade="all-delete-orphan">
 			<key column="service_id" />
 			<one-to-many class="org.openmrs.module.kenyaemr.cashier.api.model.CashierItemPrice" />
+		</bag>
+		<bag name="serviceTaxes" lazy="false" inverse="true" cascade="all-delete-orphan">
+			<key column="service_id" />
+			<one-to-many class="org.openmrs.module.kenyaemr.cashier.api.model.BillableServiceTax" />
 		</bag>
 		<property name="serviceStatus" column="service_status" not-null="true">
 			<type name="org.hibernate.type.EnumType">
@@ -162,6 +238,10 @@
 			</type>
 		</property>
 		<many-to-one name="order" class="org.openmrs.Order" column="order_id" not-null="false"/>
+		<bag name="adjustments" lazy="false" inverse="true" cascade="all-delete-orphan">
+			<key column="bill_line_item_id" />
+			<one-to-many class="org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment" />
+		</bag>
 		<!-- bi-directional many-to-one association to User -->
 		<many-to-one name="creator" class="org.openmrs.User" not-null="true" column="creator" />
 		<property name="dateCreated" type="java.util.Date" column="date_created" not-null="true" length="19" />

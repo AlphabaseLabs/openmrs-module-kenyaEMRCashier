@@ -23,6 +23,7 @@ public class BillableService extends BaseOpenmrsData {
     private StockItem stockItem;
     private Concept serviceCategory;
     private List<CashierItemPrice> servicePrices;
+    private List<BillableServiceTax> serviceTaxes;
     private BillableServiceStatus serviceStatus = BillableServiceStatus.ENABLED;
 
     public int getBillableServiceId() {
@@ -92,6 +93,14 @@ public class BillableService extends BaseOpenmrsData {
         this.servicePrices = servicePrices;
     }
 
+    public List<BillableServiceTax> getServiceTaxes() {
+        return serviceTaxes;
+    }
+
+    public void setServiceTaxes(List<BillableServiceTax> serviceTaxes) {
+        this.serviceTaxes = serviceTaxes;
+    }
+
     public Concept getConcept() {
         return concept;
     }
@@ -119,5 +128,18 @@ public class BillableService extends BaseOpenmrsData {
 
         this.servicePrices.add(price);
         price.setBillableService(this);
+    }
+
+    public void addServiceTax(BillableServiceTax tax) {
+        if (tax == null) {
+            throw new NullPointerException("Service Tax must be defined.");
+        }
+
+        if (this.serviceTaxes == null) {
+            this.serviceTaxes = new ArrayList<BillableServiceTax>();
+        }
+
+        this.serviceTaxes.add(tax);
+        tax.setBillableService(this);
     }
 }

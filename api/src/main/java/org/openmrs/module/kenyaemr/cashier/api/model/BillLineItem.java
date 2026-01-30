@@ -39,6 +39,7 @@ public class BillLineItem extends BaseOpenmrsData {
 	private Integer lineItemOrder;
 	private BillStatus paymentStatus;
 	private Order order;
+	private java.util.List<BillLineItemAdjustment> adjustments;
 
 	@Override
 	public Integer getId() {
@@ -51,15 +52,51 @@ public class BillLineItem extends BaseOpenmrsData {
 	}
 
 	/**
-	 * Get the total price for the line item
+	 * Get the subtotal price for the line item (price * quantity)
 	 *
-	 * @return BigDecimal the total price for the line item, or BigDecimal.ZERO if price or quantity is null
+	 * @return BigDecimal the subtotal price for the line item, or BigDecimal.ZERO if price or quantity is null
 	 */
-	public BigDecimal getTotal() {
+	public BigDecimal getSubTotal() {
 		if (price == null || quantity == null) {
 			return BigDecimal.ZERO;
 		}
 		return price.multiply(BigDecimal.valueOf(quantity));
+	}
+
+	/**
+	 * Get the total discount amount for this line item.
+	 *
+	 * @return BigDecimal total discount amount (sum of DISCOUNT adjustments)
+	 */
+	public BigDecimal getTotalDiscount() {
+		return getAdjustmentTotal("DISCOUNT");
+	}
+
+	/**
+	 * Get the total tax amount for this line item.
+	 *
+	 * @return BigDecimal total tax amount (sum of TAX adjustments)
+	 */
+	public BigDecimal getTotalTax() {
+		return getAdjustmentTotal("TAX");
+	}
+
+	/**
+	 * Get the net total for the line item: subtotal - discounts + taxes.
+	 *
+	 * @return BigDecimal net total amount
+	 */
+	public BigDecimal getNetTotal() {
+		return getSubTotal().subtract(getTotalDiscount()).add(getTotalTax());
+	}
+
+	/**
+	 * Get the total price for the line item (net total).
+	 *
+	 * @return BigDecimal net total for the line item
+	 */
+	public BigDecimal getTotal() {
+		return getNetTotal();
 	}
 
 	public CashierItemPrice getItemPrice() {
@@ -140,6 +177,48 @@ public class BillLineItem extends BaseOpenmrsData {
 
 	public void setOrder(Order order) {
 		this.order = order;
+	}
+
+	public java.util.List<BillLineItemAdjustment> getAdjustments() {
+		return adjustments;
+	}
+
+	public void setAdjustments(java.util.List<BillLineItemAdjustment> adjustments) {
+		this.adjustments = adjustments;
+	}
+
+	public void addAdjustment(BillLineItemAdjustment adjustment) {
+		if (adjustment == null) {
+			throw new NullPointerException("Adjustment must be defined.");
+		}
+		if (this.adjustments == null) {
+			this.adjustments = new java.util.ArrayList<BillLineItemAdjustment>();
+		}
+		this.adjustments.add(adjustment);
+		adjustment.setBillLineItem(this);
+	}
+
+	private BigDecimal getAdjustmentTotal(String adjustmentType) {
+		BigDecimal total = BigDecimal.ZERO;
+		if (adjustments == null || adjustmentType == null) {
+			return total;
+		}
+		for (BillLineItemAdjustment adjustment : adjustments) {
+			if (adjustment == null || adjustment.getVoided()) {
+				continue;
+			}
+			if (!adjustmentType.equalsIgnoreCase(adjustment.getAdjustmentType())) {
+				continue;
+			}
+			BigDecimal amount = adjustment.getAmount();
+			if (amount == null && adjustment.getBaseAmount() != null && adjustment.getRate() != null) {
+				amount = adjustment.getBaseAmount().multiply(adjustment.getRate());
+			}
+			if (amount != null) {
+				total = total.add(amount);
+			}
+		}
+		return total;
 	}
 
 	public void setItemOrServiceConceptUuid(String itemOrServiceConceptUuid) {

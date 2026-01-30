@@ -79,11 +79,59 @@ public class Bill extends BaseOpenmrsData {
 		if (lineItems != null) {
 			for (BillLineItem line : lineItems) {
 				if (line != null && !line.getVoided()) {
-					total = total.add(line.getTotal());
+					total = total.add(line.getNetTotal());
 				}
 			}
 		}
 
+		return total;
+	}
+
+	/**
+	 * Gets the subtotal amount for this bill (sum of line item price * quantity).
+	 * @return The subtotal amount
+	 */
+	public BigDecimal getSubTotal() {
+		BigDecimal total = BigDecimal.ZERO;
+		if (lineItems != null) {
+			for (BillLineItem line : lineItems) {
+				if (line != null && !line.getVoided()) {
+					total = total.add(line.getSubTotal());
+				}
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * Gets the total discount amount for this bill.
+	 * @return The total discount amount
+	 */
+	public BigDecimal getTotalDiscount() {
+		BigDecimal total = BigDecimal.ZERO;
+		if (lineItems != null) {
+			for (BillLineItem line : lineItems) {
+				if (line != null && !line.getVoided()) {
+					total = total.add(line.getTotalDiscount());
+				}
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * Gets the total tax amount for this bill.
+	 * @return The total tax amount
+	 */
+	public BigDecimal getTotalTax() {
+		BigDecimal total = BigDecimal.ZERO;
+		if (lineItems != null) {
+			for (BillLineItem line : lineItems) {
+				if (line != null && !line.getVoided()) {
+					total = total.add(line.getTotalTax());
+				}
+			}
+		}
 		return total;
 	}
 
@@ -211,14 +259,18 @@ public class Bill extends BaseOpenmrsData {
 
 	/**
 	 * Gets the remaining balance for this bill.
-	 * @return The balance amount (total bill amount - payments - deposits)
+	 * @return The balance amount (total bill amount - actual payments - waivers - deposits)
 	 */
 	public BigDecimal getBalance() {
 		BigDecimal totalBillAmount = getTotal();
-		BigDecimal totalPayments = getTotalPayments();
+		BigDecimal totalActualPayments = getTotalActualPayments();
+		BigDecimal totalWaivers = getTotalWaivers();
 		BigDecimal totalDeposits = getTotalDeposits();
 
-		return totalBillAmount.subtract(totalPayments).subtract(totalDeposits);
+		return totalBillAmount
+				.subtract(totalActualPayments)
+				.subtract(totalWaivers)
+				.subtract(totalDeposits);
 	}
 
 	@Override
@@ -388,7 +440,7 @@ public class Bill extends BaseOpenmrsData {
 	}
 
 	public void synchronizeBillStatus() {
-		BigDecimal totalPayments = getTotalPayments();
+		BigDecimal totalPayments = getTotalActualPayments().add(getTotalWaivers());
 		BigDecimal totalDeposits = getTotalDeposits();
 		BigDecimal totalSettled = totalPayments.add(totalDeposits);
 		

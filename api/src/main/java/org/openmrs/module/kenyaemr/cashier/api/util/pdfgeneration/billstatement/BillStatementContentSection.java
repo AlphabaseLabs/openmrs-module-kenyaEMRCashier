@@ -87,7 +87,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 .setMarginBottom(SUBSECTION_SPACING));
 
         // Optimized column widths for detailed information (normalized to percentages)
-        float[] itemColWidths = { 5f, 37f, 9f, 14f, 14f, 19f }; // Total: 98
+        float[] itemColWidths = { 4f, 30f, 7f, 11f, 11f, 11f, 11f, 14f }; // Total: 99
         Table itemsTable = new Table(UnitValue.createPercentArray(itemColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN)
@@ -98,6 +98,8 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         itemsTable.addHeaderCell(createHeaderCell("Service/Item Description", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Qty"));
         itemsTable.addHeaderCell(createHeaderCell("Unit Price", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Discount", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Tax", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Date Added", TextAlignment.CENTER));
 
@@ -127,7 +129,9 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                     itemsTable.addCell(createLeftCell(getItemDescription(item)));
                     itemsTable.addCell(createCenterCell(String.valueOf(item.getQuantity())));
                     itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
-                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotal())));
+                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalDiscount())));
+                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalTax())));
+                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getNetTotal())));
 
                     // Date added with time
                     String dateAdded = item.getDateCreated() != null ? SHORT_DATE_FORMAT.format(item.getDateCreated())
@@ -224,13 +228,24 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 .setMarginBottom(TABLE_MARGIN);
 
         // Calculate totals
+        BigDecimal subtotalAmount = bill.getSubTotal();
+        BigDecimal totalDiscount = bill.getTotalDiscount();
+        BigDecimal totalTax = bill.getTotalTax();
         BigDecimal totalBillAmount = bill.getTotal();
         BigDecimal totalActualPayments = bill.getTotalActualPayments();
         BigDecimal totalWaivers = bill.getTotalWaivers();
-        BigDecimal totalPayments = bill.getTotalPayments();
-        BigDecimal balanceDue = totalBillAmount.subtract(totalPayments);
+        BigDecimal balanceDue = bill.getBalance();
 
         // Summary rows
+        summaryTable.addCell(createSummaryLabelCell("Subtotal:"));
+        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(subtotalAmount)));
+
+        summaryTable.addCell(createSummaryLabelCell("Total Discount:"));
+        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalDiscount)));
+
+        summaryTable.addCell(createSummaryLabelCell("Total Tax:"));
+        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalTax)));
+
         summaryTable.addCell(createSummaryLabelCell("Total Bill Amount:"));
         summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalBillAmount)));
 

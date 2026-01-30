@@ -541,7 +541,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		receiptHeader.addCell(new Paragraph(openmrsId != null ? openmrsId.getIdentifier().toUpperCase() : "")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
 
-		float[] columnWidths = { 1f, 5f, 2f, 2f };
+		float[] columnWidths = { 1f, 4f, 2f, 2f, 2f, 2f };
 		Table billLineItemstable = new Table(columnWidths);
 		billLineItemstable.setBorder(Border.NO_BORDER);
 		billLineItemstable.setWidth(UnitValue.createPercentValue(100f));
@@ -549,6 +549,8 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		billLineItemstable.addCell(new Paragraph("Qty").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT);
 		billLineItemstable.addCell(new Paragraph("Item").setTextAlignment(TextAlignment.LEFT)).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT);
 		billLineItemstable.addCell(new Paragraph("Price")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
+		billLineItemstable.addCell(new Paragraph("Disc")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
+		billLineItemstable.addCell(new Paragraph("Tax")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
 		billLineItemstable.addCell(new Paragraph("Total")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.RIGHT);
 
 		// Only include non-voided line items in receipt
@@ -558,13 +560,36 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			}
 		}
 
-		float [] totalColWidth = {1f, 5f, 2f, 2f};
+		float [] totalColWidth = {1f, 4f, 2f, 2f, 2f, 2f};
 		Table totalsSection = new Table(totalColWidth);
 		totalsSection.setWidth(UnitValue.createPercentValue(100f));
 
 		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph("Subtotal")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(df.format(bill.getSubTotal()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph("Discount")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(df.format(bill.getTotalDiscount()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph("Tax")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(df.format(bill.getTotalTax()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph("Total")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph(" "));
+		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(df.format(bill.getTotal()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
 
 
@@ -704,7 +729,9 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		addFormattedCell(table, item.getQuantity().toString(), font, TextAlignment.LEFT);
 		addFormattedCell(table, itemName, font, TextAlignment.LEFT);
 		addFormattedCell(table, df.format(item.getPrice()), font, TextAlignment.RIGHT);
-		addFormattedCell(table, df.format(item.getTotal()), font, TextAlignment.RIGHT);
+		addFormattedCell(table, df.format(item.getTotalDiscount()), font, TextAlignment.RIGHT);
+		addFormattedCell(table, df.format(item.getTotalTax()), font, TextAlignment.RIGHT);
+		addFormattedCell(table, df.format(item.getNetTotal()), font, TextAlignment.RIGHT);
 	}
 
 	private void addFormattedCell(Table table, String cellValue, PdfFont font, TextAlignment alignment) {
