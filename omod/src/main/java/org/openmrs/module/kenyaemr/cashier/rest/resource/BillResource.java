@@ -130,9 +130,9 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("totalTax", findMethod("getTotalTax"), Representation.DEFAULT);
 			description.addProperty("balance", findMethod("getBalance"), Representation.DEFAULT);
 		} else if (rep instanceof FullRepresentation) {
-			// For FULL representation, include all properties with maximum detail
-			description.addProperty("adjustedBy", Representation.FULL);
-			description.addProperty("billAdjusted", Representation.FULL);
+			// Use REF for self-referential bill links to avoid recursive conversion loops
+			description.addProperty("adjustedBy", Representation.REF);
+			description.addProperty("billAdjusted", Representation.REF);
 			description.addProperty("cashPoint", Representation.FULL);
 			description.addProperty("cashier", Representation.FULL);
 			description.addProperty("dateCreated");
@@ -161,8 +161,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		} else if (rep instanceof CustomRepresentation) {
 			// For CUSTOM representation, include all properties but let the custom
 			// representation handle detail levels
-			description.addProperty("adjustedBy");
-			description.addProperty("billAdjusted");
+			description.addProperty("adjustedBy", Representation.REF);
+			description.addProperty("billAdjusted", Representation.REF);
 			description.addProperty("cashPoint");
 			description.addProperty("cashier");
 			description.addProperty("dateCreated");

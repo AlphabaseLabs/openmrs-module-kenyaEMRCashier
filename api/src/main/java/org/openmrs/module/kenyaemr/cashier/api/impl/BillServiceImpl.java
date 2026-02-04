@@ -42,6 +42,7 @@ import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
+import org.openmrs.OpenmrsObject;
 import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientIdentifierType;
@@ -57,6 +58,7 @@ import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAutho
 import org.openmrs.module.kenyaemr.cashier.api.base.f.Action1;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillStatus;
 import org.openmrs.module.kenyaemr.cashier.api.model.Deposit;
 import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
@@ -85,6 +87,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Collection;
 
 /**
  * Data service implementation class for {@link Bill}s.
@@ -112,6 +115,48 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	@Override
 	protected void validate(Bill bill) {
 		validatePaymentAttributes(bill);
+	}
+
+	@Override
+	protected Collection<? extends OpenmrsObject> getRelatedObjects(Bill entity) {
+		List<OpenmrsObject> related = new ArrayList<>();
+		if (entity == null) {
+			return related;
+		}
+
+		if (entity.getLineItems() != null) {
+			for (BillLineItem lineItem : entity.getLineItems()) {
+				if (lineItem == null) {
+					continue;
+				}
+				related.add(lineItem);
+				if (lineItem.getAdjustments() != null) {
+					for (BillLineItemAdjustment adjustment : lineItem.getAdjustments()) {
+						if (adjustment != null) {
+							related.add(adjustment);
+						}
+					}
+				}
+			}
+		}
+
+		if (entity.getPayments() != null) {
+			for (Payment payment : entity.getPayments()) {
+				if (payment == null) {
+					continue;
+				}
+				related.add(payment);
+				if (payment.getAttributes() != null) {
+					for (PaymentAttribute attribute : payment.getAttributes()) {
+						if (attribute != null) {
+							related.add(attribute);
+						}
+					}
+				}
+			}
+		}
+
+		return related;
 	}
 
 	/**
