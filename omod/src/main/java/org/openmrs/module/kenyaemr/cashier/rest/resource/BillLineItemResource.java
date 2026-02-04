@@ -279,6 +279,26 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
         return instance.getTotal();
     }
 
+    @PropertySetter("amount")
+    public void setAmount(BillLineItem instance, Object amount) {
+        // Derived field (price * quantity); ignore client payload value.
+    }
+
+    @PropertySetter("totalDiscount")
+    public void setTotalDiscount(BillLineItem instance, Object totalDiscount) {
+        // Derived field; discounts are provided via the discounts collection.
+    }
+
+    @PropertySetter("totalTax")
+    public void setTotalTax(BillLineItem instance, Object totalTax) {
+        // Derived field; taxes are derived/recalculated server-side.
+    }
+
+    @PropertySetter("total")
+    public void setTotal(BillLineItem instance, Object total) {
+        // Derived field; ignore client payload value.
+    }
+
     @PropertySetter("discounts")
     public void setDiscounts(BillLineItem instance, List<Map<String, Object>> discounts) {
         if (discounts == null) {
