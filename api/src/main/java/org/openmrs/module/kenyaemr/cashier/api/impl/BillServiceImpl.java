@@ -270,6 +270,26 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				item.setBill(billToUpdate);
 				billToUpdate.getLineItems().add(item);
 			}
+
+			// Merge incoming payments as well; previously these were ignored for existing open bills.
+			if (bill.getPayments() != null && !bill.getPayments().isEmpty()) {
+				for (Payment payment : new ArrayList<>(bill.getPayments())) {
+					if (payment == null) {
+						continue;
+					}
+					if (payment.getAttributes() != null) {
+						for (PaymentAttribute attribute : payment.getAttributes()) {
+							if (attribute != null) {
+								attribute.setOwner(payment);
+							}
+						}
+					}
+					billToUpdate.addPayment(payment);
+				}
+			} else {
+				// Keep status in sync for item-only updates.
+				billToUpdate.synchronizeBillStatus();
+			}
 			// appending items to existing non-closed bill
 			LOG.info("Adding " + itemsToAdd.size() + " items to existing bill: " + billToUpdate.getReceiptNumber());
 			return super.save(billToUpdate);

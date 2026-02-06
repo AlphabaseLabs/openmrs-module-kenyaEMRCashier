@@ -160,10 +160,9 @@ public class Bill extends BaseOpenmrsData {
 		if (payments != null) {
 			for (Payment payment : payments) {
 				if (payment != null && !payment.getVoided()) {
-					// Skip waivers - they should not be counted as actual payments
-					if (payment.getInstanceType() != null && 
-							payment.getInstanceType().getName() != null &&
-							!payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
+					// Treat missing instanceType as actual payment for backward compatibility.
+					if (payment.getInstanceType() == null || payment.getInstanceType().getName() == null
+							|| !payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
 						total = total.add(payment.getAmountTendered());
 					}
 				}
@@ -443,13 +442,24 @@ public class Bill extends BaseOpenmrsData {
 		BigDecimal totalPayments = getTotalActualPayments().add(getTotalWaivers());
 		BigDecimal totalDeposits = getTotalDeposits();
 		BigDecimal totalSettled = totalPayments.add(totalDeposits);
-		
+
+		BillStatus newStatus;
 		if (totalSettled.compareTo(BigDecimal.ZERO) > 0) {
 			boolean billFullySettled = totalSettled.compareTo(getTotal()) >= 0;
-			if (billFullySettled) {
-				this.setStatus(BillStatus.PAID);
-			} else {
-				this.setStatus(BillStatus.POSTED);
+			newStatus = billFullySettled ? BillStatus.PAID : BillStatus.POSTED;
+		} else {
+			// No active payments remain (e.g. all voided) — revert to PENDING.
+			newStatus = BillStatus.PENDING;
+		}
+
+		this.setStatus(newStatus);
+
+		// Propagate status to line items so they stay in sync with the bill.
+		if (this.lineItems != null) {
+			for (BillLineItem lineItem : this.lineItems) {
+				if (lineItem != null && !lineItem.getVoided()) {
+					lineItem.setPaymentStatus(newStatus);
+				}
 			}
 		}
 	}
