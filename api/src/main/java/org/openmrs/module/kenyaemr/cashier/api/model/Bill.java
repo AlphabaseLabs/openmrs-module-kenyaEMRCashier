@@ -160,10 +160,9 @@ public class Bill extends BaseOpenmrsData {
 		if (payments != null) {
 			for (Payment payment : payments) {
 				if (payment != null && !payment.getVoided()) {
-					// Skip waivers - they should not be counted as actual payments
-					if (payment.getInstanceType() != null && 
-							payment.getInstanceType().getName() != null &&
-							!payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
+					// Treat missing instanceType as actual payment for backward compatibility.
+					if (payment.getInstanceType() == null || payment.getInstanceType().getName() == null
+							|| !payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
 						total = total.add(payment.getAmountTendered());
 					}
 				}
