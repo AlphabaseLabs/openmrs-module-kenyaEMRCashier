@@ -1450,4 +1450,76 @@
 			referencedTableName="provider" referencedColumnNames="provider_id" />
 	</changeSet>
 
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-line-payment-allocation-01" author="codex">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<tableExists tableName="cashier_line_payment_allocation" />
+			</not>
+		</preConditions>
+		<comment>Create line payment allocation table to track payment distribution across line items</comment>
+		<createTable tableName="cashier_line_payment_allocation">
+			<column name="line_payment_allocation_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false" />
+			</column>
+			<column name="bill_id" type="int">
+				<constraints nullable="false" />
+			</column>
+			<column name="payment_id" type="int">
+				<constraints nullable="false" />
+			</column>
+			<column name="bill_line_item_id" type="int">
+				<constraints nullable="false" />
+			</column>
+			<column name="allocated_amount" type="decimal(10,2)">
+				<constraints nullable="false" />
+			</column>
+			<column name="creator" type="int" defaultValueNumeric="0">
+				<constraints nullable="false" />
+			</column>
+			<column name="date_created" type="datetime">
+				<constraints nullable="false" />
+			</column>
+			<column name="changed_by" type="int" />
+			<column name="date_changed" type="datetime" />
+			<column name="voided" type="boolean" defaultValueBoolean="false">
+				<constraints nullable="false" />
+			</column>
+			<column name="voided_by" type="int" />
+			<column name="date_voided" type="datetime" />
+			<column name="void_reason" type="varchar(255)" />
+			<column name="uuid" type="varchar(38)">
+				<constraints nullable="false" unique="true" />
+			</column>
+		</createTable>
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_bill_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="bill_id"
+			referencedTableName="cashier_bill" referencedColumnNames="bill_id" />
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_payment_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="payment_id"
+			referencedTableName="cashier_bill_payment" referencedColumnNames="bill_payment_id"
+			onDelete="CASCADE" />
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_line_item_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="bill_line_item_id"
+			referencedTableName="cashier_bill_line_item" referencedColumnNames="bill_line_item_id"
+			onDelete="CASCADE" />
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_creator_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="creator"
+			referencedTableName="users" referencedColumnNames="user_id" />
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_changed_by_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="changed_by"
+			referencedTableName="users" referencedColumnNames="user_id" />
+		<addForeignKeyConstraint constraintName="cashier_line_alloc_voided_by_fk"
+			baseTableName="cashier_line_payment_allocation" baseColumnNames="voided_by"
+			referencedTableName="users" referencedColumnNames="user_id" />
+		<createIndex tableName="cashier_line_payment_allocation" indexName="cashier_line_alloc_bill_idx">
+			<column name="bill_id" />
+		</createIndex>
+		<createIndex tableName="cashier_line_payment_allocation" indexName="cashier_line_alloc_payment_idx">
+			<column name="payment_id" />
+		</createIndex>
+		<createIndex tableName="cashier_line_payment_allocation" indexName="cashier_line_alloc_line_item_idx">
+			<column name="bill_line_item_id" />
+		</createIndex>
+	</changeSet>
+
 </databaseChangeLog>
