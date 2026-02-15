@@ -418,67 +418,38 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			return;
 		}
 
-		// Preserve existing allocation identities so updates do not get re-inserted as new rows.
-		Map<String, LinePaymentAllocation> existingAllocationsByUuid = new HashMap<String, LinePaymentAllocation>();
-		if (instance.getPayments() != null) {
-			for (Payment existingPayment : instance.getPayments()) {
-				if (existingPayment == null || existingPayment.getAllocations() == null) {
-					continue;
-				}
-				for (LinePaymentAllocation existingAllocation : existingPayment.getAllocations()) {
-					if (existingAllocation != null && Strings.isNotEmpty(existingAllocation.getUuid())) {
-						existingAllocationsByUuid.put(existingAllocation.getUuid(), existingAllocation);
-					}
-				}
-			}
-		}
-
-		// Ensure payments are linked to this bill before any flush-triggering calls.
-		for (Payment payment : payments) {
-			if (payment != null) {
-				payment.setBill(instance);
-				if (payment.getAttributes() != null) {
-					for (PaymentAttribute attr : payment.getAttributes()) {
-						if (attr != null) {
-							attr.setOwner(payment);
-						}
-					}
-				}
-			}
-		}
-
 		if (instance.getPayments() == null) {
-			instance.setPayments(new HashSet<Payment>(payments.size()));
+			instance.setPayments(new HashSet<Payment>());
 		}
-		BaseRestDataResource.syncCollection(instance.getPayments(), payments);
 
-		for (Payment payment : instance.getPayments()) {
-			if (payment != null) {
-				payment.setBill(instance);
-				if (payment.getAttributes() != null) {
-					for (PaymentAttribute attr : payment.getAttributes()) {
-						if (attr != null) {
-							attr.setOwner(payment);
-						}
+		// Build a map of existing payments by UUID for quick lookup
+		Map<String, Payment> existingPaymentsByUuid = new HashMap<String, Payment>();
+		for (Payment existing : instance.getPayments()) {
+			if (existing != null && Strings.isNotEmpty(existing.getUuid())) {
+				existingPaymentsByUuid.put(existing.getUuid(), existing);
+			}
+		}
+
+		// Only add NEW payments (those without a UUID match in existing payments).
+		// Existing payments are already persisted with correct attributes and allocations — skip them.
+		for (Payment payment : payments) {
+			if (payment == null) {
+				continue;
+			}
+			if (Strings.isNotEmpty(payment.getUuid()) && existingPaymentsByUuid.containsKey(payment.getUuid())) {
+				// Existing payment — already in the bill, skip it
+				continue;
+			}
+			// New payment — link and add
+			payment.setBill(instance);
+			if (payment.getAttributes() != null) {
+				for (PaymentAttribute attr : payment.getAttributes()) {
+					if (attr != null) {
+						attr.setOwner(payment);
 					}
 				}
-					if (payment.getAllocations() != null) {
-						for (LinePaymentAllocation allocation : payment.getAllocations()) {
-							if (allocation != null) {
-								if (Strings.isNotEmpty(allocation.getUuid())) {
-									LinePaymentAllocation existingAllocation = existingAllocationsByUuid.get(allocation.getUuid());
-									if (existingAllocation != null) {
-										allocation.setId(existingAllocation.getId());
-										allocation.setCreator(existingAllocation.getCreator());
-										allocation.setDateCreated(existingAllocation.getDateCreated());
-									}
-								}
-								allocation.setPayment(payment);
-								allocation.setBill(instance);
-							}
-						}
-				}
 			}
+			instance.addPayment(payment);
 		}
 
 		// Recompute status once after all payments are linked.

@@ -200,6 +200,17 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		payment.setVoidReason(reason);
 		payment.setVoidedBy(Context.getAuthenticatedUser());
 
+		// Void associated allocations
+		if (payment.getAllocations() != null) {
+			for (LinePaymentAllocation allocation : payment.getAllocations()) {
+				if (allocation != null && !Boolean.TRUE.equals(allocation.getVoided())) {
+					allocation.setVoided(true);
+					allocation.setVoidReason(reason);
+					allocation.setVoidedBy(Context.getAuthenticatedUser());
+				}
+			}
+		}
+
 		service.save(bill);
 	}
 
