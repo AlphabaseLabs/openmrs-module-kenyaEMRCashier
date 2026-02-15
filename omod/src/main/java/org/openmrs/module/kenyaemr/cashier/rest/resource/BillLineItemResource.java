@@ -46,6 +46,8 @@ import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.resource.impl.AlreadyPaged;
 import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingResourceDescription;
 import org.openmrs.module.kenyaemr.cashier.api.ICashierItemPriceService;
+import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
+import org.openmrs.module.webservices.rest.web.response.ResponseException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -62,6 +64,17 @@ import java.util.UUID;
 public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
 
     private static final Log LOG = LogFactory.getLog(BillLineItemResource.class);
+
+    @Override
+    public String getDisplayString(BillLineItem instance) {
+        if (instance.getBillableService() != null) {
+            return instance.getBillableService().getName();
+        }
+        if (instance.getItem() != null && instance.getItem().getCommonName() != null) {
+            return instance.getItem().getCommonName();
+        }
+        return "BillLineItem";
+    }
 
     @Override
     public DelegatingResourceDescription getRepresentationDescription(Representation rep) {
@@ -475,6 +488,30 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
             throw new IllegalArgumentException("Invalid sponsor provider UUID for discount");
         }
         return provider;
+    }
+
+    @Override
+    protected void delete(BillLineItem delegate, String reason, RequestContext context) throws ResponseException {
+        checkNoAllocations(delegate);
+        super.delete(delegate, reason, context);
+    }
+
+    @Override
+    public void purge(BillLineItem delegate, RequestContext context) throws ResponseException {
+        checkNoAllocations(delegate);
+        super.purge(delegate, context);
+    }
+
+    private void checkNoAllocations(BillLineItem lineItem) {
+        if (lineItem.getAllocations() != null) {
+            for (LinePaymentAllocation allocation : lineItem.getAllocations()) {
+                if (allocation != null && !Boolean.TRUE.equals(allocation.getVoided())) {
+                    throw new IllegalStateException(
+                        "Cannot delete line item '" + lineItem.getUuid()
+                        + "' because it has payment allocations. Please remove the associated payment(s) first.");
+                }
+            }
+        }
     }
 
     @Override
