@@ -39,6 +39,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.BillableService;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillableServiceStatus;
 import org.openmrs.module.kenyaemr.cashier.api.model.CashierTaxType;
 import org.openmrs.module.kenyaemr.cashier.api.model.CashPoint;
+import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.model.Timesheet;
@@ -74,9 +75,11 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -209,6 +212,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		instance.getLineItems().clear();
 
 		if (lineItems != null) {
+			int lineItemOrder = 0;
 			for (BillLineItem item : lineItems) {
 				if (item != null) {
 					// Validate required fields
@@ -225,6 +229,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 
 					applyTaxes(item);
 					item.setBill(instance);
+					// Keep line_item_order consistent with payload sequence to avoid index/property conflicts.
+					item.setLineItemOrder(lineItemOrder++);
 					if (item.getAdjustments() != null) {
 						for (BillLineItemAdjustment adjustment : item.getAdjustments()) {
 							if (adjustment != null) {
@@ -412,6 +418,21 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			return;
 		}
 
+		// Preserve existing allocation identities so updates do not get re-inserted as new rows.
+		Map<String, LinePaymentAllocation> existingAllocationsByUuid = new HashMap<String, LinePaymentAllocation>();
+		if (instance.getPayments() != null) {
+			for (Payment existingPayment : instance.getPayments()) {
+				if (existingPayment == null || existingPayment.getAllocations() == null) {
+					continue;
+				}
+				for (LinePaymentAllocation existingAllocation : existingPayment.getAllocations()) {
+					if (existingAllocation != null && Strings.isNotEmpty(existingAllocation.getUuid())) {
+						existingAllocationsByUuid.put(existingAllocation.getUuid(), existingAllocation);
+					}
+				}
+			}
+		}
+
 		// Ensure payments are linked to this bill before any flush-triggering calls.
 		for (Payment payment : payments) {
 			if (payment != null) {
@@ -440,6 +461,22 @@ public class BillResource extends BaseRestDataResource<Bill> {
 							attr.setOwner(payment);
 						}
 					}
+				}
+					if (payment.getAllocations() != null) {
+						for (LinePaymentAllocation allocation : payment.getAllocations()) {
+							if (allocation != null) {
+								if (Strings.isNotEmpty(allocation.getUuid())) {
+									LinePaymentAllocation existingAllocation = existingAllocationsByUuid.get(allocation.getUuid());
+									if (existingAllocation != null) {
+										allocation.setId(existingAllocation.getId());
+										allocation.setCreator(existingAllocation.getCreator());
+										allocation.setDateCreated(existingAllocation.getDateCreated());
+									}
+								}
+								allocation.setPayment(payment);
+								allocation.setBill(instance);
+							}
+						}
 				}
 			}
 		}

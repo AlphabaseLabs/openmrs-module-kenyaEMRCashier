@@ -20,6 +20,7 @@ import org.openmrs.module.stockmanagement.api.model.StockItem;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentModeService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentMode;
@@ -58,6 +59,7 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 			description.addProperty("amount");
 			description.addProperty("amountTendered");
 			description.addProperty("item");
+			description.addProperty("allocations", Representation.DEFAULT);
 			description.addProperty("dateCreated");
 			description.addProperty("voided");
 		}
@@ -69,13 +71,14 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	public DelegatingResourceDescription getCreatableProperties() {
 		DelegatingResourceDescription description = new DelegatingResourceDescription();
 		description.addProperty("instanceType");
-		description.addProperty("attributes");
-		description.addProperty("amount");
-		description.addProperty("amountTendered");
-		description.addProperty("item");
+			description.addProperty("attributes");
+			description.addProperty("amount");
+			description.addProperty("amountTendered");
+			description.addProperty("item");
+			description.addProperty("allocations");
 
-		return description;
-	}
+			return description;
+		}
 
 	// Work around TypeVariable issue on base generic property
 	// (BaseCustomizableInstanceData.getInstanceType)
@@ -106,6 +109,26 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		BaseRestDataResource.syncCollection(instance.getAttributes(), attributes);
 		for (PaymentAttribute attr : instance.getAttributes()) {
 			attr.setOwner(instance);
+		}
+	}
+
+	@PropertySetter("allocations")
+	public void setPaymentAllocations(Payment instance, Set<LinePaymentAllocation> allocations) {
+		if (allocations == null) {
+			return;
+		}
+		if (instance.getAllocations() == null) {
+			instance.setAllocations(new HashSet<LinePaymentAllocation>());
+		}
+
+		BaseRestDataResource.syncCollection(instance.getAllocations(), allocations);
+		for (LinePaymentAllocation allocation : instance.getAllocations()) {
+			if (allocation != null) {
+				allocation.setPayment(instance);
+				if (instance.getBill() != null) {
+					allocation.setBill(instance.getBill());
+				}
+			}
 		}
 	}
 

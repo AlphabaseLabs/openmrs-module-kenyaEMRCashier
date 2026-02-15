@@ -46,6 +46,7 @@ import org.openmrs.OpenmrsObject;
 import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientIdentifierType;
+import org.openmrs.User;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
@@ -62,6 +63,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillStatus;
 import org.openmrs.module.kenyaemr.cashier.api.model.Deposit;
 import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
+import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
@@ -81,6 +83,7 @@ import java.math.BigDecimal;
 import java.net.URL;
 import java.security.AccessControlException;
 import java.text.DecimalFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -88,6 +91,7 @@ import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Collection;
+import java.util.UUID;
 
 /**
  * Data service implementation class for {@link Bill}s.
@@ -242,6 +246,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		// If the bill has an ID, it's an update operation - save it directly
 		if (bill.getId() != null) {
 			LOG.info("Updating existing bill: " + bill.getReceiptNumber() + " with ID: " + bill.getId() + " and status: " + bill.getStatus());
+			allocatePaymentsToLineItems(bill);
 			return super.save(bill);
 		}
 
@@ -254,6 +259,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			if (billToUpdate.isClosed() || billToUpdate.getVoided()) {
 				// If the bill is closed or voided, create a new bill instead of adding to the existing one
 				LOG.info("Bill " + billToUpdate.getReceiptNumber() + " is closed or voided. Creating new bill for patient " + bill.getPatient().getPatientId());
+				allocatePaymentsToLineItems(bill);
 				return super.save(bill);
 			}
 			
@@ -292,12 +298,121 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			}
 			// appending items to existing non-closed bill
 			LOG.info("Adding " + itemsToAdd.size() + " items to existing bill: " + billToUpdate.getReceiptNumber());
+			allocatePaymentsToLineItems(billToUpdate);
 			return super.save(billToUpdate);
 		} else {
 			LOG.info("No existing bills found for patient " + bill.getPatient().getPatientId() + ", creating new bill");
 		}
 
+		allocatePaymentsToLineItems(bill);
 		return super.save(bill);
+	}
+
+	private void allocatePaymentsToLineItems(Bill bill) {
+		if (bill == null || bill.getPayments() == null || bill.getLineItems() == null) {
+			return;
+		}
+
+		List<BillLineItem> lineItemsInPayloadOrder = new ArrayList<BillLineItem>();
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem != null) {
+				lineItemsInPayloadOrder.add(lineItem);
+			}
+		}
+		if (lineItemsInPayloadOrder.isEmpty()) {
+			return;
+		}
+
+		for (Payment payment : bill.getPayments()) {
+			if (!isAllocatablePayment(payment)) {
+				continue;
+			}
+
+			payment.setBill(bill);
+			BigDecimal unallocated = getPaymentAmountForAllocation(payment).subtract(payment.getTotalAllocated());
+			if (unallocated.compareTo(BigDecimal.ZERO) <= 0) {
+				continue;
+			}
+
+			for (BillLineItem lineItem : lineItemsInPayloadOrder) {
+				if (lineItem == null || Boolean.TRUE.equals(lineItem.getVoided())) {
+					continue;
+				}
+				if (lineItem.getPaymentStatus() == BillStatus.EXEMPTED || lineItem.getPaymentStatus() == BillStatus.CANCELLED
+				        || lineItem.getPaymentStatus() == BillStatus.ADJUSTED) {
+					continue;
+				}
+
+				BigDecimal remaining = lineItem.getRemainingAmount();
+				if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+					continue;
+				}
+
+				BigDecimal allocationAmount = remaining.min(unallocated);
+				if (allocationAmount.compareTo(BigDecimal.ZERO) <= 0) {
+					continue;
+				}
+
+				LinePaymentAllocation allocation = new LinePaymentAllocation();
+				allocation.setBill(bill);
+				allocation.setPayment(payment);
+				allocation.setBillLineItem(lineItem);
+				allocation.setAllocatedAmount(allocationAmount);
+				allocation.setCreator(resolveAllocationCreator(bill, payment, lineItem));
+				allocation.setDateCreated(new Date());
+				allocation.setVoided(false);
+				allocation.setUuid(UUID.randomUUID().toString());
+
+				payment.addAllocation(allocation);
+				lineItem.addAllocation(allocation);
+
+				unallocated = unallocated.subtract(allocationAmount);
+				if (unallocated.compareTo(BigDecimal.ZERO) <= 0) {
+					break;
+				}
+			}
+		}
+	}
+
+	private BigDecimal getPaymentAmountForAllocation(Payment payment) {
+		if (payment == null) {
+			return BigDecimal.ZERO;
+		}
+		if (payment.getAmountTendered() != null) {
+			return payment.getAmountTendered();
+		}
+		if (payment.getAmount() != null) {
+			return payment.getAmount();
+		}
+		return BigDecimal.ZERO;
+	}
+
+	private boolean isAllocatablePayment(Payment payment) {
+		if (payment == null || Boolean.TRUE.equals(payment.getVoided())) {
+			return false;
+		}
+		if (payment.getInstanceType() != null && payment.getInstanceType().getName() != null
+		        && payment.getInstanceType().getName().equalsIgnoreCase("Waiver")) {
+			return false;
+		}
+		return getPaymentAmountForAllocation(payment).compareTo(BigDecimal.ZERO) > 0;
+	}
+
+	private User resolveAllocationCreator(Bill bill, Payment payment, BillLineItem lineItem) {
+		User authenticated = Context.getAuthenticatedUser();
+		if (authenticated != null) {
+			return authenticated;
+		}
+		if (payment != null && payment.getCreator() != null) {
+			return payment.getCreator();
+		}
+		if (lineItem != null && lineItem.getCreator() != null) {
+			return lineItem.getCreator();
+		}
+		if (bill != null && bill.getCreator() != null) {
+			return bill.getCreator();
+		}
+		return Context.getUserService().getUser(1);
 	}
 
 	@Override

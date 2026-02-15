@@ -84,6 +84,7 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
             description.addProperty("totalDiscount");
             description.addProperty("totalTax");
             description.addProperty("total");
+            description.addProperty("totalAllocated");
         }
         return description;
     }
@@ -277,6 +278,16 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
     @PropertyGetter("total")
     public BigDecimal getTotal(BillLineItem instance) {
         return instance.getTotal();
+    }
+
+    @PropertyGetter("totalAllocated")
+    public BigDecimal getTotalAllocated(BillLineItem instance) {
+        return instance.getTotalAllocated();
+    }
+
+    @PropertySetter("totalAllocated")
+    public void setTotalAllocated(BillLineItem instance, Object value) {
+        // Derived field; computed from allocations. Ignore client payload.
     }
 
     @PropertySetter("amount")

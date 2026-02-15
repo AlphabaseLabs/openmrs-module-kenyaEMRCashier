@@ -17,6 +17,8 @@ import org.openmrs.module.kenyaemr.cashier.api.base.entity.model.BaseInstanceCus
 import org.openmrs.module.stockmanagement.api.model.StockItem;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Model class that represents the {@link Bill} payment information.
@@ -29,6 +31,7 @@ public class Payment extends BaseInstanceCustomizableData<PaymentMode, PaymentAt
 	private BigDecimal amount;
 	private BigDecimal amountTendered;
 	private StockItem item;
+	private Set<LinePaymentAllocation> allocations;
 
 
 	public Integer getId() {
@@ -85,5 +88,38 @@ public class Payment extends BaseInstanceCustomizableData<PaymentMode, PaymentAt
 
 	public void setItem(StockItem item) {
 		this.item = item;
+	}
+
+	public Set<LinePaymentAllocation> getAllocations() {
+		return allocations;
+	}
+
+	public void setAllocations(Set<LinePaymentAllocation> allocations) {
+		this.allocations = allocations;
+	}
+
+	public void addAllocation(LinePaymentAllocation allocation) {
+		if (allocation == null) {
+			throw new NullPointerException("Allocation must be defined.");
+		}
+		if (this.allocations == null) {
+			this.allocations = new HashSet<LinePaymentAllocation>();
+		}
+		this.allocations.add(allocation);
+		allocation.setPayment(this);
+	}
+
+	public BigDecimal getTotalAllocated() {
+		BigDecimal total = BigDecimal.ZERO;
+		if (allocations == null) {
+			return total;
+		}
+		for (LinePaymentAllocation allocation : allocations) {
+			if (allocation == null || Boolean.TRUE.equals(allocation.getVoided()) || allocation.getAllocatedAmount() == null) {
+				continue;
+			}
+			total = total.add(allocation.getAllocatedAmount());
+		}
+		return total;
 	}
 }

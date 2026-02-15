@@ -14,6 +14,8 @@
 package org.openmrs.module.kenyaemr.cashier.api.model;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.openmrs.BaseOpenmrsData;
 import org.openmrs.Order;
@@ -40,6 +42,7 @@ public class BillLineItem extends BaseOpenmrsData {
 	private BillStatus paymentStatus;
 	private Order order;
 	private java.util.List<BillLineItemAdjustment> adjustments;
+	private Set<LinePaymentAllocation> allocations;
 
 	@Override
 	public Integer getId() {
@@ -196,6 +199,44 @@ public class BillLineItem extends BaseOpenmrsData {
 		}
 		this.adjustments.add(adjustment);
 		adjustment.setBillLineItem(this);
+	}
+
+	public Set<LinePaymentAllocation> getAllocations() {
+		return allocations;
+	}
+
+	public void setAllocations(Set<LinePaymentAllocation> allocations) {
+		this.allocations = allocations;
+	}
+
+	public void addAllocation(LinePaymentAllocation allocation) {
+		if (allocation == null) {
+			throw new NullPointerException("Allocation must be defined.");
+		}
+		if (this.allocations == null) {
+			this.allocations = new HashSet<LinePaymentAllocation>();
+		}
+		this.allocations.add(allocation);
+		allocation.setBillLineItem(this);
+	}
+
+	public BigDecimal getTotalAllocated() {
+		BigDecimal total = BigDecimal.ZERO;
+		if (allocations == null) {
+			return total;
+		}
+		for (LinePaymentAllocation allocation : allocations) {
+			if (allocation == null || Boolean.TRUE.equals(allocation.getVoided()) || allocation.getAllocatedAmount() == null) {
+				continue;
+			}
+			total = total.add(allocation.getAllocatedAmount());
+		}
+		return total;
+	}
+
+	public BigDecimal getRemainingAmount() {
+		BigDecimal remaining = getNetTotal().subtract(getTotalAllocated());
+		return remaining.compareTo(BigDecimal.ZERO) > 0 ? remaining : BigDecimal.ZERO;
 	}
 
 	private BigDecimal getAdjustmentTotal(String adjustmentType) {
