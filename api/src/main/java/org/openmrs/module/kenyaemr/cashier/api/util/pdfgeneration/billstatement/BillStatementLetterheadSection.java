@@ -101,7 +101,7 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
                 .setPadding(4f)
                 .setVerticalAlignment(VerticalAlignment.TOP);
 
-        cell.add(new Paragraph("PATIENT INFORMATION").setBold().setFontSize(10).setMarginBottom(4f));
+        cell.add(new Paragraph("CLIENT INFORMATION").setBold().setFontSize(10).setMarginBottom(4f));
         cell.add(createInfoLine("ID:", getPatientIdentifier(patient)));
         cell.add(createInfoLine("Name:", getPatientFullName(patient)));
         cell.add(createInfoLine("Age:", patient.getBirthdate() != null ? String.valueOf(patient.getAge()) : ""));

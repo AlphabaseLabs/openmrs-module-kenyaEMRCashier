@@ -167,7 +167,7 @@ public class InvoiceLetterheadSection
                 .setPadding(4f)
                 .setVerticalAlignment(VerticalAlignment.TOP);
 
-        cell.add(new Paragraph("PATIENT INFORMATION").setBold().setFontSize(10).setMarginBottom(4f));
+        cell.add(new Paragraph("CLIENT INFORMATION").setBold().setFontSize(10).setMarginBottom(4f));
         cell.add(createInfoLine("ID:", data.patientIdentifier));
         cell.add(createInfoLine("Name:", data.patientName));
         cell.add(createInfoLine("Age:", data.age));
