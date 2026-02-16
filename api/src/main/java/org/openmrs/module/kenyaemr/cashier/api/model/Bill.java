@@ -453,15 +453,6 @@ public class Bill extends BaseOpenmrsData {
 		}
 
 		this.setStatus(newStatus);
-
-		// Propagate status to line items so they stay in sync with the bill.
-		if (this.lineItems != null) {
-			for (BillLineItem lineItem : this.lineItems) {
-				if (lineItem != null && !lineItem.getVoided()) {
-					lineItem.setPaymentStatus(newStatus);
-				}
-			}
-		}
 	}
 
 	public void removePayment(Payment payment) {
