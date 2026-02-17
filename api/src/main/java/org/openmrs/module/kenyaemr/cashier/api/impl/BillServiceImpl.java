@@ -736,10 +736,10 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		receiptHeader.addCell(new Paragraph("Receipt No:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
 		receiptHeader.addCell(new Paragraph(bill.getReceiptNumber())).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Patient:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph("Client:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
 		receiptHeader.addCell(new Paragraph(WordUtils.capitalizeFully(fullName + " (" + patient.getAge() + " Years)"))).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Patient ID:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
+		receiptHeader.addCell(new Paragraph("Client ID:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
 		receiptHeader.addCell(new Paragraph(openmrsId != null ? openmrsId.getIdentifier().toUpperCase() : "")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
 
