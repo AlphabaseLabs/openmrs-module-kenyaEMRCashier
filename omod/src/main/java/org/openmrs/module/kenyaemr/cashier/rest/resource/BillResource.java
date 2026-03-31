@@ -48,6 +48,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
+import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
 import org.openmrs.module.kenyaemr.cashier.api.util.RoundingUtil;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
 import org.openmrs.module.kenyaemr.cashier.base.resource.AlreadyPagedWithLength;
@@ -75,11 +76,9 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -422,24 +421,68 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			instance.setPayments(new HashSet<Payment>());
 		}
 
-		// Build a map of existing payments by UUID for quick lookup
-		Map<String, Payment> existingPaymentsByUuid = new HashMap<String, Payment>();
+		Set<Integer> existingPaymentIds = new HashSet<Integer>();
+		Set<String> existingPaymentUuids = new HashSet<String>();
+		Set<String> persistedPaymentAttributeKeys = new HashSet<String>();
+		Set<String> persistedPaymentReplaySignatures = new HashSet<String>();
 		for (Payment existing : instance.getPayments()) {
-			if (existing != null && Strings.isNotEmpty(existing.getUuid())) {
-				existingPaymentsByUuid.put(existing.getUuid(), existing);
+			if (existing == null) {
+				continue;
+			}
+			if (existing.getId() != null) {
+				existingPaymentIds.add(existing.getId());
+			}
+			String existingUuid = StringUtils.trimToNull(existing.getUuid());
+			if (existingUuid != null) {
+				existingPaymentUuids.add(existingUuid);
+			}
+			if (existing.getId() != null && !Boolean.TRUE.equals(existing.getVoided())) {
+				persistedPaymentAttributeKeys.addAll(PaymentReplayUtil.getAttributeValueKeys(existing));
+				String replaySignature = PaymentReplayUtil.getReplaySignature(existing);
+				if (replaySignature != null) {
+					persistedPaymentReplaySignatures.add(replaySignature);
+				}
 			}
 		}
 
-		// Only add NEW payments (those without a UUID match in existing payments).
-		// Existing payments are already persisted with correct attributes and allocations — skip them.
+		// Only add NEW payments that do not match an existing persisted payment.
+		// This handles idempotent client retries where payment UUID is missing but unique attributes
+		// (e.g. Transaction ID) already exist on the bill.
 		for (Payment payment : payments) {
 			if (payment == null) {
 				continue;
 			}
-			if (Strings.isNotEmpty(payment.getUuid()) && existingPaymentsByUuid.containsKey(payment.getUuid())) {
-				// Existing payment — already in the bill, skip it
+
+			if (payment.getId() != null && existingPaymentIds.contains(payment.getId())) {
 				continue;
 			}
+
+			String paymentUuid = StringUtils.trimToNull(payment.getUuid());
+			if (paymentUuid != null && existingPaymentUuids.contains(paymentUuid)) {
+				continue;
+			}
+
+			String incomingReplaySignature = PaymentReplayUtil.getReplaySignature(payment);
+			if (incomingReplaySignature != null && persistedPaymentReplaySignatures.contains(incomingReplaySignature)) {
+				LOG.info("Skipping duplicate incoming payment for bill " + instance.getUuid()
+				        + " (paymentId=" + payment.getId() + ", paymentUuid=" + payment.getUuid() + ")");
+				continue;
+			}
+
+			Set<String> incomingAttributeKeys = PaymentReplayUtil.getAttributeValueKeys(payment);
+			boolean duplicatesPersistedPayment = false;
+			for (String incomingKey : incomingAttributeKeys) {
+				if (persistedPaymentAttributeKeys.contains(incomingKey)) {
+					duplicatesPersistedPayment = true;
+					break;
+				}
+			}
+			if (duplicatesPersistedPayment) {
+				LOG.info("Skipping duplicate incoming payment for bill " + instance.getUuid()
+				        + " (paymentId=" + payment.getId() + ", paymentUuid=" + payment.getUuid() + ")");
+				continue;
+			}
+
 			// New payment — link and add
 			payment.setBill(instance);
 			if (payment.getAttributes() != null) {
@@ -450,6 +493,16 @@ public class BillResource extends BaseRestDataResource<Bill> {
 				}
 			}
 			instance.addPayment(payment);
+
+			if (payment.getId() != null) {
+				existingPaymentIds.add(payment.getId());
+			}
+			if (paymentUuid != null) {
+				existingPaymentUuids.add(paymentUuid);
+			}
+			if (incomingReplaySignature != null) {
+				persistedPaymentReplaySignatures.add(incomingReplaySignature);
+			}
 		}
 
 		// Recompute status once after all payments are linked.

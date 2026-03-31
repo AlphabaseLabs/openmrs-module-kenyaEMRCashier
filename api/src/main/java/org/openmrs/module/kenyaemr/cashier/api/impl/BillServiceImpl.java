@@ -70,6 +70,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentAttributeService;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
+import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
 import org.openmrs.module.kenyaemr.cashier.util.Utils;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -179,14 +180,14 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		for (Payment payment : bill.getPayments()) {
 			// CRITICAL FIX: Skip voided payments - they are historical records and should not be validated
 			// Voided payments may have attributes that conflict with new payments, but that's acceptable
-			if (payment.getVoided()) {
+			if (Boolean.TRUE.equals(payment.getVoided())) {
 				continue;
 			}
 			
 			if (payment.getAttributes() != null) {
 				for (PaymentAttribute attribute : payment.getAttributes()) {
-					if (attribute.getAttributeType() != null && StringUtils.isNotBlank(attribute.getValue())) {
-						String attributeTypeId = attribute.getAttributeType().getId().toString();
+					String attributeTypeId = PaymentReplayUtil.getAttributeTypeKey(attribute);
+					if (attributeTypeId != null && StringUtils.isNotBlank(attribute.getValue())) {
 						String attributeValue = attribute.getValue().trim();
 						
 						// Initialize the set for this attribute type if it doesn't exist
@@ -209,6 +210,40 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				}
 			}
 		}
+	}
+
+	private void normalizePaymentAttributeOwners(Payment payment) {
+		if (payment == null || payment.getAttributes() == null) {
+			return;
+		}
+		for (PaymentAttribute attribute : payment.getAttributes()) {
+			if (attribute != null) {
+				attribute.setOwner(payment);
+			}
+		}
+	}
+
+	/**
+	 * Determines whether an incoming payment should be merged into an existing open bill.
+	 * This method is idempotency-aware: when a persisted payment already exists with the
+	 * same identity (id/uuid) or same unique attribute value (e.g., Transaction Id),
+	 * the incoming payment is treated as a replay and skipped.
+	 */
+	boolean shouldMergeIncomingPayment(Bill existingBill, Payment incomingPayment) {
+		if (existingBill == null || incomingPayment == null || Boolean.TRUE.equals(incomingPayment.getVoided())) {
+			return false;
+		}
+		if (existingBill.getPayments() == null || existingBill.getPayments().isEmpty()) {
+			return true;
+		}
+
+		for (Payment existingPayment : existingBill.getPayments()) {
+			if (PaymentReplayUtil.isReplayOf(existingPayment, incomingPayment)) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -279,18 +314,23 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 			// Merge incoming payments as well; previously these were ignored for existing open bills.
 			if (bill.getPayments() != null && !bill.getPayments().isEmpty()) {
+				boolean mergedPayments = false;
 				for (Payment payment : new ArrayList<>(bill.getPayments())) {
 					if (payment == null) {
 						continue;
 					}
-					if (payment.getAttributes() != null) {
-						for (PaymentAttribute attribute : payment.getAttributes()) {
-							if (attribute != null) {
-								attribute.setOwner(payment);
-							}
-						}
+					if (!shouldMergeIncomingPayment(billToUpdate, payment)) {
+						LOG.info("Skipping duplicate incoming payment for bill " + billToUpdate.getReceiptNumber()
+						        + " (paymentId=" + payment.getId() + ", paymentUuid=" + payment.getUuid() + ")");
+						continue;
 					}
+					normalizePaymentAttributeOwners(payment);
 					billToUpdate.addPayment(payment);
+					mergedPayments = true;
+				}
+				if (!mergedPayments) {
+					// Keep status in sync when all incoming payments are idempotent replays.
+					billToUpdate.synchronizeBillStatus();
 				}
 			} else {
 				// Keep status in sync for item-only updates.
