@@ -38,6 +38,13 @@ public class ModuleSettings {
 	public static final String PATIENT_DASHBOARD_2_BILL_COUNT =
 	        "openhmis.cashier.patientDashboard2BillCount";
 	private static final Integer DEFAULT_PATIENT_DASHBOARD_2_BILL_COUNT = 4;
+	public static final String AUTO_CLOSE_PAID_BILLS_ENABLED_PROPERTY = "openhmis.cashier.autoClosePaidBills.enabled";
+	public static final String AUTO_CLOSE_PAID_BILLS_REASON_PROPERTY = "openhmis.cashier.autoClosePaidBills.reason";
+	public static final String AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS_PROPERTY =
+	        "openhmis.cashier.autoClosePaidBills.repeatIntervalSeconds";
+	public static final Boolean DEFAULT_AUTO_CLOSE_PAID_BILLS_ENABLED = Boolean.TRUE;
+	public static final String DEFAULT_AUTO_CLOSE_PAID_BILLS_REASON = "Auto-closed by scheduler";
+	public static final Long DEFAULT_AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS = 86400L;
 	public static final String DEPARTMENT_COLLECTIONS_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentCollections";
 	public static final String DEPARTMENT_REVENUE_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentRevenue";
 	public static final String SHIFT_SUMMARY_REPORT_ID_PROPERTY = "openhmis.cashier.reports.shiftSummary";
@@ -55,6 +62,26 @@ public class ModuleSettings {
 
 	public static Integer getReceiptReportId() {
 		return getIntProperty(RECEIPT_REPORT_ID_PROPERTY);
+	}
+
+	public static Boolean isAutoClosePaidBillsEnabled() {
+		Boolean enabled = getBoolProperty(AUTO_CLOSE_PAID_BILLS_ENABLED_PROPERTY);
+		return enabled != null ? enabled : DEFAULT_AUTO_CLOSE_PAID_BILLS_ENABLED;
+	}
+
+	public static String getAutoClosePaidBillsReason() {
+		String reason = administrationService.getGlobalProperty(AUTO_CLOSE_PAID_BILLS_REASON_PROPERTY);
+		return StringUtils.isNotBlank(reason) ? reason : DEFAULT_AUTO_CLOSE_PAID_BILLS_REASON;
+	}
+
+	public static Long getAutoClosePaidBillsRepeatIntervalSeconds() {
+		String value = administrationService.getGlobalProperty(AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS_PROPERTY);
+		if (StringUtils.isBlank(value) || !NumberUtils.isDigits(value.trim())) {
+			return DEFAULT_AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS;
+		}
+
+		long repeatInterval = Long.parseLong(value.trim());
+		return repeatInterval > 0 ? repeatInterval : DEFAULT_AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS;
 	}
 
 	public static CashierSettings loadSettings() {

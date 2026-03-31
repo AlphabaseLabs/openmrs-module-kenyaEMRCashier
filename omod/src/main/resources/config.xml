@@ -106,6 +106,24 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>openhmis.cashier.autoClosePaidBills.enabled</property>
+		<description>Enable automatic closing of today's paid bills.</description>
+		<defaultValue>true</defaultValue>
+	</globalProperty>
+
+	<globalProperty>
+		<property>openhmis.cashier.autoClosePaidBills.reason</property>
+		<description>The close reason recorded when the scheduler auto-closes a paid bill.</description>
+		<defaultValue>Auto-closed by scheduler</defaultValue>
+	</globalProperty>
+
+	<globalProperty>
+		<property>openhmis.cashier.autoClosePaidBills.repeatIntervalSeconds</property>
+		<description>The interval in seconds between automatic paid-bill close task runs.</description>
+		<defaultValue>86400</defaultValue>
+	</globalProperty>
+
+	<globalProperty>
 		<property>${project.parent.artifactId}.reports.departmentCollections</property>
 		<description>
 			The ID of the Department Collections report.
