@@ -239,6 +239,26 @@ public class BillLineItem extends BaseOpenmrsData {
 		return remaining.compareTo(BigDecimal.ZERO) > 0 ? remaining : BigDecimal.ZERO;
 	}
 
+	public void synchronizePaymentStatus() {
+		if (paymentStatus == BillStatus.EXEMPTED
+		        || paymentStatus == BillStatus.CANCELLED
+		        || paymentStatus == BillStatus.ADJUSTED) {
+			return;
+		}
+
+		BigDecimal netTotal = getNetTotal();
+		BigDecimal allocated = getTotalAllocated();
+		if (netTotal.compareTo(BigDecimal.ZERO) == 0) {
+			setPaymentStatus(BillStatus.PAID);
+		} else if (netTotal.compareTo(BigDecimal.ZERO) > 0 && allocated.compareTo(netTotal) >= 0) {
+			setPaymentStatus(BillStatus.PAID);
+		} else if (allocated.compareTo(BigDecimal.ZERO) > 0) {
+			setPaymentStatus(BillStatus.POSTED);
+		} else {
+			setPaymentStatus(BillStatus.PENDING);
+		}
+	}
+
 	private BigDecimal getAdjustmentTotal(String adjustmentType) {
 		BigDecimal total = BigDecimal.ZERO;
 		if (adjustments == null || adjustmentType == null) {

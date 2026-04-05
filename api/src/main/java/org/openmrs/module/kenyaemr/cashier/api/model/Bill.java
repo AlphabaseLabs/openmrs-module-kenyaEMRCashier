@@ -439,6 +439,11 @@ public class Bill extends BaseOpenmrsData {
 	}
 
 	public void synchronizeBillStatus() {
+		if (hasActiveLineItems() && getTotal().compareTo(BigDecimal.ZERO) == 0) {
+			this.setStatus(BillStatus.PAID);
+			return;
+		}
+
 		BigDecimal totalPayments = getTotalActualPayments().add(getTotalWaivers());
 		BigDecimal totalDeposits = getTotalDeposits();
 		BigDecimal totalSettled = totalPayments.add(totalDeposits);
@@ -453,6 +458,20 @@ public class Bill extends BaseOpenmrsData {
 		}
 
 		this.setStatus(newStatus);
+	}
+
+	private boolean hasActiveLineItems() {
+		if (lineItems == null) {
+			return false;
+		}
+
+		for (BillLineItem lineItem : lineItems) {
+			if (lineItem != null && !Boolean.TRUE.equals(lineItem.getVoided())) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public void removePayment(Payment payment) {

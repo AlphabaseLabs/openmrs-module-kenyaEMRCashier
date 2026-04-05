@@ -157,11 +157,13 @@ public class DepositServiceImpl extends BaseEntityDataServiceImpl<Deposit> imple
             // Add current transaction amount
             lineItemPaid = lineItemPaid.add(transaction.getAmount());
 
-            // Mark as paid only if fully paid
+            // Keep the line-item status in sync with its net amount and deposit coverage.
             if (lineItemPaid.compareTo(lineItemTotal) >= 0) {
                 billLineItem.setPaymentStatus(BillStatus.PAID);
-                Context.getService(BillLineItemService.class).save(billLineItem);
+            } else {
+                billLineItem.synchronizePaymentStatus();
             }
+            Context.getService(BillLineItemService.class).save(billLineItem);
             
             // Synchronize the bill status to reflect the new deposit
             if (billLineItem.getBill() != null) {
@@ -199,7 +201,7 @@ public class DepositServiceImpl extends BaseEntityDataServiceImpl<Deposit> imple
         // transaction
         if (transaction.getTransactionType() == TransactionType.APPLY && transaction.getBillLineItem() != null) {
             BillLineItem billLineItem = transaction.getBillLineItem();
-            billLineItem.setPaymentStatus(BillStatus.PENDING);
+            billLineItem.synchronizePaymentStatus();
             Context.getService(BillLineItemService.class).save(billLineItem);
             
             // Synchronize the bill status to reflect the voided deposit

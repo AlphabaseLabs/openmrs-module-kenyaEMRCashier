@@ -413,26 +413,13 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			}
 		}
 
-		// Update each line item's paymentStatus based on its allocations.
-		// This runs AFTER allocations are created, so the status reflects the true state.
+		// Update each line item's paymentStatus after allocations are created so the
+		// status reflects both allocations and zero-balance discount cases.
 		for (BillLineItem lineItem : lineItemsInPayloadOrder) {
 			if (lineItem == null || Boolean.TRUE.equals(lineItem.getVoided())) {
 				continue;
 			}
-			if (lineItem.getPaymentStatus() == BillStatus.EXEMPTED
-			        || lineItem.getPaymentStatus() == BillStatus.CANCELLED
-			        || lineItem.getPaymentStatus() == BillStatus.ADJUSTED) {
-				continue;
-			}
-			BigDecimal allocated = lineItem.getTotalAllocated();
-			BigDecimal netTotal = lineItem.getNetTotal();
-			if (allocated.compareTo(netTotal) >= 0 && netTotal.compareTo(BigDecimal.ZERO) > 0) {
-				lineItem.setPaymentStatus(BillStatus.PAID);
-			} else if (allocated.compareTo(BigDecimal.ZERO) > 0) {
-				lineItem.setPaymentStatus(BillStatus.POSTED);
-			} else {
-				lineItem.setPaymentStatus(BillStatus.PENDING);
-			}
+			lineItem.synchronizePaymentStatus();
 		}
 	}
 
