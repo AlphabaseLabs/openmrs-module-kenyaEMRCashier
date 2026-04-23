@@ -135,6 +135,14 @@ public interface IBillService extends IEntityDataService<Bill> {
 	Bill reopenBill(Bill bill);
 
 	/**
+	 * Recomputes all line item payment statuses and the parent bill status for the specified bill.
+	 * @param billUuid The UUID of the bill to synchronize.
+	 * @return The updated bill.
+	 */
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	Bill syncBillStatus(String billUuid);
+
+	/**
 	 * Searches for non-closed bills for a patient created on the same day.
 	 * @param patient The patient to search for bills.
 	 * @return List of non-closed bills for the patient on the same day.

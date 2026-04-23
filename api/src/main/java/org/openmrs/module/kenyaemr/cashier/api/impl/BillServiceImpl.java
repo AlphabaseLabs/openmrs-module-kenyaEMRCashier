@@ -1003,6 +1003,36 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		return super.save(bill);
 	}
 
+	@Override
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	@Transactional
+	public Bill syncBillStatus(String billUuid) {
+		if (StringUtils.isBlank(billUuid)) {
+			throw new IllegalArgumentException("The bill UUID must be defined.");
+		}
+
+		Bill bill = getByUuid(billUuid);
+		if (bill == null) {
+			throw new IllegalArgumentException("Bill not found with UUID: " + billUuid);
+		}
+
+		if (bill.getLineItems() != null) {
+			for (BillLineItem lineItem : bill.getLineItems()) {
+				if (lineItem != null) {
+					lineItem.synchronizePaymentStatus();
+				}
+			}
+		}
+
+		bill.synchronizeBillStatus();
+
+		if (bill.getLineItems() != null && !bill.getLineItems().isEmpty()) {
+			return super.saveAll(bill, bill.getLineItems());
+		}
+
+		return super.save(bill);
+	}
+
 	/**
 	 * Get logo from facility information global property
 	 * @return Image object or null if not found

@@ -33,9 +33,10 @@ import java.util.Map;
  * Endpoints:
  * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/close
  * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/reopen
+ * - POST /rest/v1/cashier/bill/sync-status/{billUuid}
  */
 @Controller
-@RequestMapping(value = "/rest/" + RestConstants.VERSION_1 + "/kenyaemr-cashier/bill")
+@RequestMapping(value = "/rest/" + RestConstants.VERSION_1)
 public class BillActionController extends BaseRestController {
 
     /**
@@ -45,7 +46,7 @@ public class BillActionController extends BaseRestController {
      * @param requestBody The request body containing the close reason
      * @return The updated bill information
      */
-    @RequestMapping(value = "/{billUuid}/close", method = RequestMethod.POST)
+    @RequestMapping(value = "/kenyaemr-cashier/bill/{billUuid}/close", method = RequestMethod.POST)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> closeBill(
             @PathVariable("billUuid") String billUuid,
@@ -70,19 +71,8 @@ public class BillActionController extends BaseRestController {
             }
             
             Bill closedBill = service.closeBill(bill, reason);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("uuid", closedBill.getUuid());
-            response.put("receiptNumber", closedBill.getReceiptNumber());
-            response.put("status", closedBill.getStatus());
-            response.put("closed", closedBill.isClosed());
-            response.put("closeReason", closedBill.getCloseReason());
-            response.put("closedBy", closedBill.getClosedBy() != null ? closedBill.getClosedBy().getUuid() : null);
-            response.put("dateClosed", closedBill.getDateClosed());
-            response.put("balance", closedBill.getBalance());
-            response.put("message", "Bill closed successfully");
-            
-            return new ResponseEntity<>(response, HttpStatus.OK);
+
+            return new ResponseEntity<>(buildBillResponse(closedBill, "Bill closed successfully"), HttpStatus.OK);
             
         } catch (IllegalStateException e) {
             Map<String, Object> error = new HashMap<>();
@@ -101,7 +91,7 @@ public class BillActionController extends BaseRestController {
      * @param billUuid The UUID of the bill to reopen
      * @return The updated bill information
      */
-    @RequestMapping(value = "/{billUuid}/reopen", method = RequestMethod.POST)
+    @RequestMapping(value = "/kenyaemr-cashier/bill/{billUuid}/reopen", method = RequestMethod.POST)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> reopenBill(
             @PathVariable("billUuid") String billUuid) {
@@ -117,19 +107,8 @@ public class BillActionController extends BaseRestController {
             }
             
             Bill reopenedBill = service.reopenBill(bill);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("uuid", reopenedBill.getUuid());
-            response.put("receiptNumber", reopenedBill.getReceiptNumber());
-            response.put("status", reopenedBill.getStatus());
-            response.put("closed", reopenedBill.isClosed());
-            response.put("closeReason", reopenedBill.getCloseReason());
-            response.put("closedBy", reopenedBill.getClosedBy() != null ? reopenedBill.getClosedBy().getUuid() : null);
-            response.put("dateClosed", reopenedBill.getDateClosed());
-            response.put("balance", reopenedBill.getBalance());
-            response.put("message", "Bill reopened successfully");
-            
-            return new ResponseEntity<>(response, HttpStatus.OK);
+
+            return new ResponseEntity<>(buildBillResponse(reopenedBill, "Bill reopened successfully"), HttpStatus.OK);
             
         } catch (IllegalStateException e) {
             Map<String, Object> error = new HashMap<>();
@@ -141,4 +120,49 @@ public class BillActionController extends BaseRestController {
             return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-} 
+
+    /**
+     * Alias endpoint for bill status synchronization. The documented REST resource path is
+     * POST /rest/v1/cashier/bill/{billUuid}/sync-status, but this alias is kept for callers
+     * using the explicit action-style URL.
+     *
+     * @param billUuid The UUID of the bill to resynchronize
+     * @return The updated bill information
+     */
+    @RequestMapping(value = "/cashier/bill/sync-status/{billUuid}", method = RequestMethod.POST)
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> syncBillStatus(
+            @PathVariable("billUuid") String billUuid) {
+
+        try {
+            IBillService service = Context.getService(IBillService.class);
+            Bill syncedBill = service.syncBillStatus(billUuid);
+
+            return new ResponseEntity<>(buildBillResponse(syncedBill, "Bill status synchronized successfully"),
+                    HttpStatus.OK);
+
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "An error occurred while synchronizing bill status: " + e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private Map<String, Object> buildBillResponse(Bill bill, String message) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("uuid", bill.getUuid());
+        response.put("receiptNumber", bill.getReceiptNumber());
+        response.put("status", bill.getStatus());
+        response.put("closed", bill.isClosed());
+        response.put("closeReason", bill.getCloseReason());
+        response.put("closedBy", bill.getClosedBy() != null ? bill.getClosedBy().getUuid() : null);
+        response.put("dateClosed", bill.getDateClosed());
+        response.put("balance", bill.getBalance());
+        response.put("message", message);
+        return response;
+    }
+}

@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -60,6 +61,38 @@ public class BillStatusSynchronizationTest {
 		bill.synchronizeBillStatus();
 
 		assertEquals(BillStatus.PENDING, bill.getStatus());
+	}
+
+	@Test
+	public void synchronizeStatuses_shouldRefreshLineItemAndBillStatusFromAllocations() {
+		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(2000), BigDecimal.ZERO);
+		lineItem.setPaymentStatus(BillStatus.PENDING);
+
+		LinePaymentAllocation allocation = new LinePaymentAllocation();
+		allocation.setAllocatedAmount(BigDecimal.valueOf(2000));
+
+		Bill bill = new Bill();
+		bill.setLineItems(Arrays.asList(lineItem));
+		lineItem.setBill(bill);
+
+		Payment payment = new Payment();
+		payment.setAmount(BigDecimal.valueOf(2000));
+		payment.setAmountTendered(BigDecimal.valueOf(2000));
+		payment.setAllocations(Collections.singleton(allocation));
+		payment.setBill(bill);
+
+		allocation.setBill(bill);
+		allocation.setPayment(payment);
+		lineItem.setAllocations(Collections.singleton(allocation));
+		bill.setPayments(Collections.singleton(payment));
+		bill.setStatus(BillStatus.PENDING);
+
+		lineItem.synchronizePaymentStatus();
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.PAID, lineItem.getPaymentStatus());
+		assertEquals(BillStatus.PAID, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
 	}
 
 	private BillLineItem createLineItemWithDiscount(BigDecimal price, BigDecimal discountAmount) {
