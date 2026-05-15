@@ -38,6 +38,7 @@ import org.apache.commons.lang.WordUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hibernate.Criteria;
+import org.hibernate.Query;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.openmrs.GlobalProperty;
@@ -53,19 +54,27 @@ import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IDepositService;
 import org.openmrs.module.kenyaemr.cashier.api.IReceiptNumberGenerator;
 import org.openmrs.module.kenyaemr.cashier.api.ReceiptNumberGeneratorFactory;
+import org.openmrs.module.kenyaemr.cashier.api.ITimesheetService;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataServiceImpl;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
 import org.openmrs.module.kenyaemr.cashier.api.base.f.Action1;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistoryMetricsSummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistorySummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillStatus;
 import org.openmrs.module.kenyaemr.cashier.api.model.Deposit;
 import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
+import org.openmrs.module.kenyaemr.cashier.api.model.HistorySearchCriteria;
 import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistoryMetricsSummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistorySummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentMethodTotalSummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.Timesheet;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentAttributeService;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
@@ -92,6 +101,9 @@ import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.UUID;
 
 /**
@@ -109,6 +121,10 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 	public static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 	public static final String PAYMENT_REFERENCE_ATTRIBUTE = "d453e528-0264-4d6e-ae23-bc0b777e1146";
+	private static final String EMPTY_VALUE_DISPLAY = "--";
+	private static final String CASH_PAYMENT_METHOD = "cash";
+	private static final String WAIVER_PAYMENT_METHOD = "Waiver";
+	private static final String REFERENCE_NUMBER_DESCRIPTION = "Reference Number";
 
 
 	@Override
@@ -642,6 +658,684 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		List<Bill> results = getRepository().select(Bill.class, criteria);
 		removeNullLineItems(results);
 		return results;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public List<BillingHistorySummary> getBillingHistory(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		if (resolvedCriteria.emptyResult) {
+			return new ArrayList<BillingHistorySummary>();
+		}
+
+		List<Integer> billIds = findBillingHistoryBillIds(resolvedCriteria, getCriteriaStartIndex(criteria),
+		    getCriteriaLimit(criteria));
+		List<Bill> bills = loadBillsByIds(billIds);
+		List<BillingHistorySummary> summaries = new ArrayList<BillingHistorySummary>(bills.size());
+		for (Bill bill : bills) {
+			summaries.add(toBillingHistorySummary(bill, resolvedCriteria));
+		}
+		return summaries;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public long getBillingHistoryCount(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		return resolvedCriteria.emptyResult ? 0 : countBillingHistoryBills(resolvedCriteria);
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public BillingHistorySummary getBillingHistoryByUuid(String billUuid, HistorySearchCriteria criteria) {
+		Bill bill = getByUuid(billUuid);
+		return bill == null ? null : toBillingHistorySummary(bill, resolveHistoryCriteria(criteria));
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public BillingHistoryMetricsSummary getBillingHistoryMetrics(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		if (resolvedCriteria.emptyResult) {
+			return new BillingHistoryMetricsSummary();
+		}
+
+		List<Bill> bills = loadBillsByIds(findBillingHistoryBillIds(resolvedCriteria, null, null));
+		BillingHistoryMetricsSummary metrics = new BillingHistoryMetricsSummary();
+		Map<String, BigDecimal> paymentModeTotals = new HashMap<String, BigDecimal>();
+		BigDecimal totalBills = BigDecimal.ZERO;
+		BigDecimal totalPayments = BigDecimal.ZERO;
+		BigDecimal totalDue = BigDecimal.ZERO;
+		BigDecimal totalDiscount = BigDecimal.ZERO;
+		BigDecimal waivedAmount = BigDecimal.ZERO;
+		BigDecimal exemptedAmount = BigDecimal.ZERO;
+		BigDecimal taxCollectionAmount = BigDecimal.ZERO;
+
+		for (Bill bill : bills) {
+			List<Payment> visiblePayments = getVisiblePayments(bill, resolvedCriteria);
+			BigDecimal billAmount = safeBigDecimal(bill.getTotal());
+			BigDecimal paidAmount = getActualPaymentTotal(visiblePayments);
+			totalBills = totalBills.add(billAmount);
+			totalPayments = totalPayments.add(paidAmount);
+			totalDue = totalDue.add(calculateMetricsDueAmount(bill, paidAmount));
+			totalDiscount = totalDiscount.add(safeBigDecimal(bill.getTotalDiscount()));
+			waivedAmount = waivedAmount.add(safeBigDecimal(bill.getTotalWaivers()));
+			exemptedAmount = exemptedAmount.add(safeBigDecimal(bill.getTotalExempted()));
+
+			if (BillStatus.PAID.equals(bill.getStatus())) {
+				taxCollectionAmount = taxCollectionAmount.add(safeBigDecimal(bill.getTotalTax()));
+			}
+
+			addPaymentMethodTotals(paymentModeTotals, visiblePayments);
+		}
+
+		metrics.setTotalBills(totalBills);
+		metrics.setTotalPayments(totalPayments);
+		metrics.setTotalDue(totalDue);
+		metrics.setTotalDiscount(totalDiscount);
+		metrics.setWaivedAmount(waivedAmount);
+		metrics.setExemptedAmount(exemptedAmount);
+		metrics.setTaxCollectionAmount(taxCollectionAmount);
+		metrics.setPaymentMethodTotals(toPaymentMethodTotals(paymentModeTotals));
+		return metrics;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public List<PaymentHistorySummary> getPaymentHistory(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		if (resolvedCriteria.emptyResult) {
+			return new ArrayList<PaymentHistorySummary>();
+		}
+
+		List<Integer> paymentIds = findPaymentHistoryPaymentIds(resolvedCriteria, getCriteriaStartIndex(criteria),
+		    getCriteriaLimit(criteria));
+		List<Payment> payments = loadPaymentsByIds(paymentIds);
+		List<PaymentHistorySummary> summaries = new ArrayList<PaymentHistorySummary>(payments.size());
+		for (Payment payment : payments) {
+			summaries.add(toPaymentHistorySummary(payment));
+		}
+		return summaries;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public long getPaymentHistoryCount(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		return resolvedCriteria.emptyResult ? 0 : countPaymentHistoryPayments(resolvedCriteria);
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public PaymentHistorySummary getPaymentHistoryByUuid(String paymentUuid, HistorySearchCriteria criteria) {
+		Payment payment = findPaymentByUuid(paymentUuid);
+		return payment == null ? null : toPaymentHistorySummary(payment);
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	public PaymentHistoryMetricsSummary getPaymentHistoryMetrics(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolvedCriteria = resolveHistoryCriteria(criteria);
+		if (resolvedCriteria.emptyResult) {
+			return new PaymentHistoryMetricsSummary();
+		}
+
+		List<Payment> payments = loadPaymentsByIds(findPaymentHistoryPaymentIds(resolvedCriteria, null, null));
+		PaymentHistoryMetricsSummary metrics = new PaymentHistoryMetricsSummary();
+		Map<String, BigDecimal> paymentModeTotals = new HashMap<String, BigDecimal>();
+		Map<String, BigDecimal> payeeTotals = new HashMap<String, BigDecimal>();
+		Map<String, String> payeeNames = new HashMap<String, String>();
+		BigDecimal totalPayments = BigDecimal.ZERO;
+		BigDecimal cash = BigDecimal.ZERO;
+		BigDecimal others = BigDecimal.ZERO;
+
+		for (Payment payment : payments) {
+			BigDecimal amount = safeBigDecimal(payment.getAmountTendered());
+			String paymentMethod = normalizeValue(getPaymentMethodName(payment));
+			String payeeKey = buildPayeeKey(payment.getBill());
+			String patientName = getPatientName(payment.getBill());
+
+			totalPayments = totalPayments.add(amount);
+			if (CASH_PAYMENT_METHOD.equalsIgnoreCase(paymentMethod)) {
+				cash = cash.add(amount);
+			} else {
+				others = others.add(amount);
+			}
+
+			addAmount(paymentModeTotals, paymentMethod, amount);
+			addAmount(payeeTotals, payeeKey, amount);
+			payeeNames.put(payeeKey, patientName);
+		}
+
+		metrics.setTotalPayments(totalPayments);
+		metrics.setCash(cash);
+		metrics.setOthers(others);
+		PayeeSummary topPayee = resolveTopPayee(payeeTotals, payeeNames);
+		metrics.setTopPayeeName(topPayee.name);
+		metrics.setTopPayeeAmount(topPayee.amount);
+		metrics.setPaymentMethodTotals(toPaymentMethodTotals(paymentModeTotals));
+		return metrics;
+	}
+
+	private ResolvedHistoryCriteria resolveHistoryCriteria(HistorySearchCriteria criteria) {
+		ResolvedHistoryCriteria resolved = new ResolvedHistoryCriteria();
+		if (criteria == null) {
+			return resolved;
+		}
+
+		resolved.fromDate = criteria.getFromDate();
+		resolved.toDate = criteria.getToDate();
+		resolved.patientUuid = normalizeFilterValue(criteria.getPatientUuid());
+		resolved.status = criteria.getStatus();
+		resolved.paymentModes = normalizeFilterValues(criteria.getPaymentModes());
+		resolved.cashierUuids = normalizeFilterValues(criteria.getCashierUuids());
+
+		String timesheetUuid = normalizeFilterValue(criteria.getTimesheetUuid());
+		if (timesheetUuid == null) {
+			return resolved;
+		}
+
+		Timesheet timesheet = Context.getService(ITimesheetService.class).getByUuid(timesheetUuid);
+		if (timesheet == null || Boolean.TRUE.equals(timesheet.getVoided()) || timesheet.getCashier() == null) {
+			resolved.emptyResult = true;
+			return resolved;
+		}
+
+		String timesheetCashierUuid = timesheet.getCashier().getUuid();
+		if (!resolved.cashierUuids.isEmpty() && !resolved.cashierUuids.contains(timesheetCashierUuid)) {
+			resolved.emptyResult = true;
+			return resolved;
+		}
+
+		resolved.cashierUuids = new ArrayList<String>();
+		resolved.cashierUuids.add(timesheetCashierUuid);
+		resolved.fromDate = maxDate(resolved.fromDate, timesheet.getClockIn());
+		resolved.toDate = minDate(resolved.toDate, timesheet.getClockOut() == null ? new Date() : timesheet.getClockOut());
+		if (resolved.fromDate != null && resolved.toDate != null && resolved.fromDate.after(resolved.toDate)) {
+			resolved.emptyResult = true;
+		}
+
+		return resolved;
+	}
+
+	private List<Integer> findBillingHistoryBillIds(ResolvedHistoryCriteria criteria, Integer startIndex, Integer limit) {
+		StringBuilder hql = buildBillingHistoryQuery(criteria, false);
+		hql.append(" order by b.dateCreated desc, b.id desc");
+
+		Query query = getRepository().createQuery(hql.toString());
+		applyHistoryQueryParameters(query, criteria);
+		applyOffsetLimit(query, startIndex, limit);
+		return query.list();
+	}
+
+	private long countBillingHistoryBills(ResolvedHistoryCriteria criteria) {
+		Query query = getRepository().createQuery(buildBillingHistoryQuery(criteria, true).toString());
+		applyHistoryQueryParameters(query, criteria);
+		Long count = (Long) query.uniqueResult();
+		return count == null ? 0 : count.longValue();
+	}
+
+	private List<Integer> findPaymentHistoryPaymentIds(ResolvedHistoryCriteria criteria, Integer startIndex, Integer limit) {
+		StringBuilder hql = buildPaymentHistoryQuery(criteria, false);
+		hql.append(" order by p.dateCreated desc, p.id desc");
+
+		Query query = getRepository().createQuery(hql.toString());
+		applyHistoryQueryParameters(query, criteria);
+		applyOffsetLimit(query, startIndex, limit);
+		return query.list();
+	}
+
+	private long countPaymentHistoryPayments(ResolvedHistoryCriteria criteria) {
+		Query query = getRepository().createQuery(buildPaymentHistoryQuery(criteria, true).toString());
+		applyHistoryQueryParameters(query, criteria);
+		Long count = (Long) query.uniqueResult();
+		return count == null ? 0 : count.longValue();
+	}
+
+	private StringBuilder buildBillingHistoryQuery(ResolvedHistoryCriteria criteria, boolean countOnly) {
+		StringBuilder hql = new StringBuilder(countOnly ? "select count(distinct b.id) from Bill b" : "select distinct b.id from Bill b");
+		if (!criteria.paymentModes.isEmpty()) {
+			hql.append(" join b.payments p");
+		}
+		hql.append(" where b.voided = false");
+		appendBillingHistoryFilters(hql, criteria);
+		return hql;
+	}
+
+	private void appendBillingHistoryFilters(StringBuilder hql, ResolvedHistoryCriteria criteria) {
+		if (criteria.fromDate != null) {
+			hql.append(" and b.dateCreated >= :fromDate");
+		}
+		if (criteria.toDate != null) {
+			hql.append(" and b.dateCreated <= :toDate");
+		}
+		if (criteria.patientUuid != null) {
+			hql.append(" and b.patient.uuid = :patientUuid");
+		}
+		if (criteria.status != null) {
+			hql.append(" and b.status = :status");
+		}
+		if (!criteria.cashierUuids.isEmpty()) {
+			hql.append(" and b.cashier.uuid in (:cashierUuids)");
+		}
+		if (!criteria.paymentModes.isEmpty()) {
+			hql.append(" and p.voided = false and p.instanceType.name in (:paymentModes)");
+		}
+	}
+
+	private StringBuilder buildPaymentHistoryQuery(ResolvedHistoryCriteria criteria, boolean countOnly) {
+		StringBuilder hql = new StringBuilder(countOnly ? "select count(p.id) from Payment p join p.bill b"
+		        : "select p.id from Payment p join p.bill b");
+		hql.append(" where p.voided = false and b.voided = false");
+		appendPaymentHistoryFilters(hql, criteria);
+		return hql;
+	}
+
+	private void appendPaymentHistoryFilters(StringBuilder hql, ResolvedHistoryCriteria criteria) {
+		if (criteria.fromDate != null) {
+			hql.append(" and p.dateCreated >= :fromDate");
+		}
+		if (criteria.toDate != null) {
+			hql.append(" and p.dateCreated <= :toDate");
+		}
+		if (criteria.patientUuid != null) {
+			hql.append(" and b.patient.uuid = :patientUuid");
+		}
+		if (criteria.status != null) {
+			hql.append(" and b.status = :status");
+		}
+		if (!criteria.cashierUuids.isEmpty()) {
+			hql.append(" and b.cashier.uuid in (:cashierUuids)");
+		}
+		if (!criteria.paymentModes.isEmpty()) {
+			hql.append(" and p.instanceType.name in (:paymentModes)");
+		}
+	}
+
+	private void applyHistoryQueryParameters(Query query, ResolvedHistoryCriteria criteria) {
+		if (criteria.fromDate != null) {
+			query.setTimestamp("fromDate", criteria.fromDate);
+		}
+		if (criteria.toDate != null) {
+			query.setTimestamp("toDate", criteria.toDate);
+		}
+		if (criteria.patientUuid != null) {
+			query.setString("patientUuid", criteria.patientUuid);
+		}
+		if (criteria.status != null) {
+			query.setParameter("status", criteria.status);
+		}
+		if (!criteria.cashierUuids.isEmpty()) {
+			query.setParameterList("cashierUuids", criteria.cashierUuids);
+		}
+		if (!criteria.paymentModes.isEmpty()) {
+			query.setParameterList("paymentModes", criteria.paymentModes);
+		}
+	}
+
+	private void applyOffsetLimit(Query query, Integer startIndex, Integer limit) {
+		if (startIndex != null && startIndex.intValue() >= 0) {
+			query.setFirstResult(startIndex.intValue());
+		}
+		if (limit != null && limit.intValue() > 0) {
+			query.setMaxResults(limit.intValue());
+			query.setFetchSize(limit.intValue());
+		}
+	}
+
+	private List<Bill> loadBillsByIds(List<Integer> billIds) {
+		if (billIds == null || billIds.isEmpty()) {
+			return new ArrayList<Bill>();
+		}
+
+		Criteria criteria = getRepository().createCriteria(Bill.class);
+		criteria.add(Restrictions.in("id", billIds));
+		List<Bill> bills = getRepository().select(Bill.class, criteria);
+		removeNullLineItems(bills);
+		return orderEntitiesByIds(billIds, bills);
+	}
+
+	private List<Payment> loadPaymentsByIds(List<Integer> paymentIds) {
+		if (paymentIds == null || paymentIds.isEmpty()) {
+			return new ArrayList<Payment>();
+		}
+
+		Criteria criteria = getRepository().createCriteria(Payment.class);
+		criteria.add(Restrictions.in("id", paymentIds));
+		List<Payment> payments = getRepository().select(Payment.class, criteria);
+		return orderEntitiesByIds(paymentIds, payments);
+	}
+
+	private <T extends OpenmrsObject> List<T> orderEntitiesByIds(List<Integer> ids, List<T> entities) {
+		Map<Integer, T> entityById = new HashMap<Integer, T>();
+		for (T entity : entities) {
+			entityById.put(entity.getId(), entity);
+		}
+
+		List<T> orderedEntities = new ArrayList<T>(ids.size());
+		for (Integer id : ids) {
+			T entity = entityById.get(id);
+			if (entity != null) {
+				orderedEntities.add(entity);
+			}
+		}
+		return orderedEntities;
+	}
+
+	private Payment findPaymentByUuid(String paymentUuid) {
+		if (StringUtils.isBlank(paymentUuid)) {
+			return null;
+		}
+
+		Criteria criteria = getRepository().createCriteria(Payment.class);
+		criteria.add(Restrictions.eq("uuid", paymentUuid));
+		return getRepository().selectSingle(Payment.class, criteria);
+	}
+
+	private BillingHistorySummary toBillingHistorySummary(Bill bill, ResolvedHistoryCriteria criteria) {
+		BillingHistorySummary summary = new BillingHistorySummary();
+		List<Payment> visiblePayments = getVisiblePayments(bill, criteria);
+		summary.setUuid(bill.getUuid());
+		summary.setBillId(bill.getId());
+		summary.setReceiptNumber(bill.getReceiptNumber());
+		summary.setPatientUuid(bill.getPatient() == null ? null : bill.getPatient().getUuid());
+		summary.setPatientName(getPatientName(bill));
+		summary.setIdentifier(getPatientIdentifier(bill));
+		summary.setDateCreated(bill.getDateCreated());
+		summary.setStatus(bill.getStatus() == null ? null : bill.getStatus().name());
+		summary.setTotalAmount(safeBigDecimal(bill.getTotal()));
+		summary.setTotalDiscount(safeBigDecimal(bill.getTotalDiscount()));
+		summary.setTotalPaid(getActualPaymentTotal(visiblePayments));
+		summary.setAmountDue(safeBigDecimal(bill.getBalance()));
+		summary.setBilledItems(buildBilledItemsDisplay(bill));
+		summary.setReferenceCodes(buildReferenceCodes(visiblePayments));
+		return summary;
+	}
+
+	private PaymentHistorySummary toPaymentHistorySummary(Payment payment) {
+		Bill bill = payment.getBill();
+		PaymentHistorySummary summary = new PaymentHistorySummary();
+		summary.setUuid(payment.getUuid());
+		summary.setPaymentId(payment.getId());
+		summary.setBillUuid(bill == null ? null : bill.getUuid());
+		summary.setPatientUuid(bill == null || bill.getPatient() == null ? null : bill.getPatient().getUuid());
+		summary.setPatientName(getPatientName(bill));
+		summary.setIdentifier(getPatientIdentifier(bill));
+		summary.setInvoiceId(bill == null ? EMPTY_VALUE_DISPLAY : normalizeValue(bill.getReceiptNumber()));
+		summary.setPaymentDate(payment.getDateCreated());
+		summary.setPaymentAmount(safeBigDecimal(payment.getAmountTendered()));
+		summary.setPaymentMethod(normalizeValue(getPaymentMethodName(payment)));
+		summary.setReferenceId(buildPaymentReferenceId(payment));
+		return summary;
+	}
+
+	private List<Payment> getVisiblePayments(Bill bill, ResolvedHistoryCriteria criteria) {
+		List<Payment> visiblePayments = new ArrayList<Payment>();
+		if (bill == null || bill.getPayments() == null) {
+			return visiblePayments;
+		}
+
+		for (Payment payment : bill.getPayments()) {
+			if (payment == null || Boolean.TRUE.equals(payment.getVoided())) {
+				continue;
+			}
+			if (!criteria.paymentModes.isEmpty() && !criteria.paymentModes.contains(getPaymentMethodName(payment))) {
+				continue;
+			}
+			visiblePayments.add(payment);
+		}
+
+		return visiblePayments;
+	}
+
+	private BigDecimal getActualPaymentTotal(List<Payment> payments) {
+		BigDecimal total = BigDecimal.ZERO;
+		for (Payment payment : payments) {
+			if (payment == null || Boolean.TRUE.equals(payment.getVoided())) {
+				continue;
+			}
+			if (WAIVER_PAYMENT_METHOD.equalsIgnoreCase(getPaymentMethodName(payment))) {
+				continue;
+			}
+			total = total.add(safeBigDecimal(payment.getAmountTendered()));
+		}
+		return total;
+	}
+
+	private BigDecimal calculateMetricsDueAmount(Bill bill, BigDecimal visibleActualPayments) {
+		BigDecimal due = safeBigDecimal(bill.getTotal()).subtract(visibleActualPayments)
+		        .subtract(safeBigDecimal(bill.getTotalWaivers()));
+		return due.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : due;
+	}
+
+	private void addPaymentMethodTotals(Map<String, BigDecimal> paymentModeTotals, List<Payment> payments) {
+		for (Payment payment : payments) {
+			String paymentMethod = normalizeValue(getPaymentMethodName(payment));
+			addAmount(paymentModeTotals, paymentMethod, safeBigDecimal(payment.getAmountTendered()));
+		}
+	}
+
+	private void addAmount(Map<String, BigDecimal> totals, String key, BigDecimal amount) {
+		totals.put(key, safeBigDecimal(totals.get(key)).add(safeBigDecimal(amount)));
+	}
+
+	private PayeeSummary resolveTopPayee(Map<String, BigDecimal> payeeTotals, Map<String, String> payeeNames) {
+		String topPayeeName = null;
+		BigDecimal topPayeeAmount = BigDecimal.ZERO;
+
+		for (Map.Entry<String, BigDecimal> entry : payeeTotals.entrySet()) {
+			BigDecimal amount = entry.getValue();
+			String name = payeeNames.get(entry.getKey());
+			if (amount.compareTo(topPayeeAmount) > 0
+			        || amount.compareTo(topPayeeAmount) == 0 && topPayeeName != null && name != null
+			                && name.compareToIgnoreCase(topPayeeName) < 0) {
+				topPayeeAmount = amount;
+				topPayeeName = name;
+			}
+			if (topPayeeName == null && name != null) {
+				topPayeeName = name;
+			}
+		}
+
+		return new PayeeSummary(topPayeeName, topPayeeAmount);
+	}
+
+	private List<PaymentMethodTotalSummary> toPaymentMethodTotals(Map<String, BigDecimal> paymentModeTotals) {
+		List<PaymentMethodTotalSummary> totals = new ArrayList<PaymentMethodTotalSummary>(paymentModeTotals.size());
+		for (Map.Entry<String, BigDecimal> entry : paymentModeTotals.entrySet()) {
+			totals.add(new PaymentMethodTotalSummary(entry.getKey(), entry.getValue()));
+		}
+		Collections.sort(totals, new Comparator<PaymentMethodTotalSummary>() {
+			@Override
+			public int compare(PaymentMethodTotalSummary first, PaymentMethodTotalSummary second) {
+				int amountComparison = second.getTotal().compareTo(first.getTotal());
+				if (amountComparison != 0) {
+					return amountComparison;
+				}
+				return first.getPaymentMethod().compareToIgnoreCase(second.getPaymentMethod());
+			}
+		});
+		return totals;
+	}
+
+	private String buildBilledItemsDisplay(Bill bill) {
+		if (bill == null || bill.getLineItems() == null || bill.getLineItems().isEmpty()) {
+			return EMPTY_VALUE_DISPLAY;
+		}
+
+		List<String> names = new ArrayList<String>();
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem == null || Boolean.TRUE.equals(lineItem.getVoided())) {
+				continue;
+			}
+			names.add(extractServiceName(lineItem));
+		}
+		return names.isEmpty() ? EMPTY_VALUE_DISPLAY : StringUtils.join(names, ", ");
+	}
+
+	private String buildReferenceCodes(List<Payment> payments) {
+		List<String> codes = new ArrayList<String>();
+		for (Payment payment : payments) {
+			String referenceValue = buildPaymentReferenceValue(payment);
+			if (StringUtils.isNotBlank(referenceValue)) {
+				codes.add(getPaymentMethodName(payment) + ": " + referenceValue);
+			}
+		}
+		return codes.isEmpty() ? EMPTY_VALUE_DISPLAY : StringUtils.join(codes, ", ");
+	}
+
+	private String buildPaymentReferenceId(Payment payment) {
+		List<String> referenceIds = getPaymentAttributeValues(payment, true);
+		if (!referenceIds.isEmpty()) {
+			return StringUtils.join(referenceIds, ", ");
+		}
+
+		List<String> fallbackValues = getPaymentAttributeValues(payment, false);
+		return fallbackValues.isEmpty() ? EMPTY_VALUE_DISPLAY : StringUtils.join(fallbackValues, ", ");
+	}
+
+	private String buildPaymentReferenceValue(Payment payment) {
+		List<String> values = getPaymentAttributeValues(payment, false);
+		return values.isEmpty() ? null : StringUtils.join(values, ", ");
+	}
+
+	private List<String> getPaymentAttributeValues(Payment payment, boolean referenceOnly) {
+		List<String> values = new ArrayList<String>();
+		if (payment == null || payment.getAttributes() == null) {
+			return values;
+		}
+
+		for (PaymentAttribute attribute : payment.getAttributes()) {
+			if (attribute == null || StringUtils.isBlank(attribute.getValue())) {
+				continue;
+			}
+			if (referenceOnly && (attribute.getAttributeType() == null
+			        || !REFERENCE_NUMBER_DESCRIPTION.equals(attribute.getAttributeType().getDescription()))) {
+				continue;
+			}
+			values.add(attribute.getValue().trim());
+		}
+		return values;
+	}
+
+	private String getPaymentMethodName(Payment payment) {
+		return payment == null || payment.getInstanceType() == null || StringUtils.isBlank(payment.getInstanceType().getName())
+		        ? EMPTY_VALUE_DISPLAY
+		        : payment.getInstanceType().getName();
+	}
+
+	private String getPatientName(Bill bill) {
+		if (bill == null || bill.getPatient() == null || bill.getPatient().getPersonName() == null) {
+			return EMPTY_VALUE_DISPLAY;
+		}
+		return normalizeValue(bill.getPatient().getPersonName().getFullName());
+	}
+
+	private String getPatientIdentifier(Bill bill) {
+		return bill == null || bill.getPatient() == null || bill.getPatient().getPatientIdentifier() == null
+		        || StringUtils.isBlank(bill.getPatient().getPatientIdentifier().getIdentifier()) ? EMPTY_VALUE_DISPLAY
+		                : bill.getPatient().getPatientIdentifier().getIdentifier();
+	}
+
+	private String buildPayeeKey(Bill bill) {
+		if (bill == null || bill.getPatient() == null) {
+			return EMPTY_VALUE_DISPLAY;
+		}
+		return StringUtils.isBlank(bill.getPatient().getUuid()) ? getPatientName(bill) : bill.getPatient().getUuid();
+	}
+
+	private String extractServiceName(BillLineItem lineItem) {
+		String rawName = null;
+		if (lineItem.getBillableService() != null && StringUtils.isNotBlank(lineItem.getBillableService().getName())) {
+			rawName = lineItem.getBillableService().getName();
+		} else if (lineItem.getItem() != null && StringUtils.isNotBlank(lineItem.getItem().getCommonName())) {
+			rawName = lineItem.getItem().getCommonName();
+		}
+
+		if (StringUtils.isBlank(rawName)) {
+			return EMPTY_VALUE_DISPLAY;
+		}
+
+		String[] parts = rawName.split(":");
+		if (parts.length == 1) {
+			return rawName.trim();
+		}
+
+		return parts[0].trim().matches("^[0-9a-fA-F-]{36}$") ? parts[1].trim() : parts[0].trim();
+	}
+
+	private String normalizeValue(String value) {
+		return StringUtils.isBlank(value) ? EMPTY_VALUE_DISPLAY : value.trim();
+	}
+
+	private String normalizeFilterValue(String value) {
+		return StringUtils.isBlank(value) ? null : value.trim();
+	}
+
+	private Integer getCriteriaLimit(HistorySearchCriteria criteria) {
+		return criteria == null ? null : criteria.getLimit();
+	}
+
+	private Integer getCriteriaStartIndex(HistorySearchCriteria criteria) {
+		return criteria == null ? null : criteria.getStartIndex();
+	}
+
+	private BigDecimal safeBigDecimal(BigDecimal value) {
+		return value == null ? BigDecimal.ZERO : value;
+	}
+
+	private Date maxDate(Date first, Date second) {
+		if (first == null) {
+			return second;
+		}
+		if (second == null) {
+			return first;
+		}
+		return first.after(second) ? first : second;
+	}
+
+	private Date minDate(Date first, Date second) {
+		if (first == null) {
+			return second;
+		}
+		if (second == null) {
+			return first;
+		}
+		return first.before(second) ? first : second;
+	}
+
+	private List<String> normalizeFilterValues(List<String> values) {
+		if (values == null || values.isEmpty()) {
+			return new ArrayList<String>();
+		}
+
+		LinkedHashSet<String> normalizedValues = new LinkedHashSet<String>();
+		for (String value : values) {
+			if (StringUtils.isNotBlank(value)) {
+				normalizedValues.add(value.trim());
+			}
+		}
+		return new ArrayList<String>(normalizedValues);
+	}
+
+	private static class ResolvedHistoryCriteria {
+		private Date fromDate;
+		private Date toDate;
+		private String patientUuid;
+		private BillStatus status;
+		private List<String> paymentModes = new ArrayList<String>();
+		private List<String> cashierUuids = new ArrayList<String>();
+		private boolean emptyResult;
+	}
+
+	private static class PayeeSummary {
+		private final String name;
+		private final BigDecimal amount;
+
+		private PayeeSummary(String name, BigDecimal amount) {
+			this.name = name;
+			this.amount = amount;
+		}
 	}
 
 	/**

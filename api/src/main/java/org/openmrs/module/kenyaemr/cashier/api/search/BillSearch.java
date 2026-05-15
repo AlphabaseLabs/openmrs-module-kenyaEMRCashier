@@ -15,6 +15,7 @@ package org.openmrs.module.kenyaemr.cashier.api.search;
 
 import org.hibernate.Criteria;
 import org.hibernate.criterion.Restrictions;
+import org.apache.commons.lang.StringUtils;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.search.BaseDataTemplateSearch;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.util.OpenmrsUtil;
@@ -28,7 +29,7 @@ import java.util.Date;
 public class BillSearch extends BaseDataTemplateSearch<Bill> {
 	private Date createdOnOrBefore;
 	private Date createdOnOrAfter;
-	private Boolean includeClosedBills = true; // Changed default to true to show all bills by default
+	private boolean includeClosedBills = true;
 
 	public BillSearch() {
 		this(new Bill(), false);
@@ -53,7 +54,7 @@ public class BillSearch extends BaseDataTemplateSearch<Bill> {
 		super(template, includeRetired);
 		this.createdOnOrAfter = createdOnOrAfter;
 		this.createdOnOrBefore = createdOnOrBefore;
-		this.includeClosedBills = includeClosedBills != null ? includeClosedBills : true; // Changed default to true
+		this.includeClosedBills = includeClosedBills == null || includeClosedBills.booleanValue();
 	}
 
 	@Override
@@ -70,13 +71,13 @@ public class BillSearch extends BaseDataTemplateSearch<Bill> {
 		if (bill.getPatient() != null) {
 			criteria.add(Restrictions.eq("patient", bill.getPatient()));
 		}
+		if (!StringUtils.isBlank(bill.getReceiptNumber())) {
+			criteria.add(Restrictions.eq("receiptNumber", bill.getReceiptNumber()));
+		}
 		if (bill.getStatus() != null) {
 			criteria.add(Restrictions.eq("status", bill.getStatus()));
 		}
 
-		// Include all bills by default unless explicitly requested to exclude closed bills
-		// Use only the 'closed' property to identify closed bills, not BillStatus
-		// Also treat voided bills as closed bills
 		if (!includeClosedBills) {
 			criteria.add(Restrictions.eq("closed", false));
 			criteria.add(Restrictions.eq("voided", false));
@@ -117,6 +118,6 @@ public class BillSearch extends BaseDataTemplateSearch<Bill> {
 	}
 
 	public void setIncludeClosedBills(Boolean includeClosedBills) {
-		this.includeClosedBills = includeClosedBills != null ? includeClosedBills : true; // Changed default to true
+		this.includeClosedBills = includeClosedBills == null || includeClosedBills.booleanValue();
 	}
 }

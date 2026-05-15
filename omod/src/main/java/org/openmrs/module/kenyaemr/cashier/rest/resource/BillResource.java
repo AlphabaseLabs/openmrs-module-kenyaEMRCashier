@@ -633,76 +633,90 @@ public class BillResource extends BaseRestDataResource<Bill> {
 
 	@Override
 	protected AlreadyPaged<Bill> doSearch(RequestContext context) {
-		String patientUuid = context.getRequest().getParameter("patientUuid");
-		String status = context.getRequest().getParameter("status");
-		String cashPointUuid = context.getRequest().getParameter("cashPointUuid");
-		String createdOnOrBeforeDateStr = context.getRequest().getParameter("createdOnOrBefore");
-		String createdOnOrAfterDateStr = context.getRequest().getParameter("createdOnOrAfter");
+		BillSearchRequest searchRequest = BillSearchRequest.from(context);
+		PagingInfo pagingInfo = buildPagingInfo(context, searchRequest.requestTotalCount);
+		List<Bill> result = Context.getService(IBillService.class).getBills(buildBillSearch(searchRequest), pagingInfo);
+		return buildPagedResponse(context, result, pagingInfo);
+	}
 
-		// Add voided parameter with default false
-		String includedVoidedBillsStr = context.getRequest().getParameter("includeVoidedBills");
-		boolean includeVoidedBills = Strings.isNotEmpty(includedVoidedBillsStr)
-				? Boolean.parseBoolean(includedVoidedBillsStr)
-				: false;
-
-		// Add includeClosedBills parameter with default true (include all bills by
-		// default)
-		String includeClosedBillsStr = context.getRequest().getParameter("includeClosedBills");
-		boolean includeClosedBills = Strings.isNotEmpty(includeClosedBillsStr)
-				? Boolean.parseBoolean(includeClosedBillsStr)
-				: true;
-
-		// Check if totalCount is requested
-		String totalCountStr = context.getRequest().getParameter("totalCount");
-		boolean requestTotalCount = Strings.isNotEmpty(totalCountStr) && Boolean.parseBoolean(totalCountStr);
-
-		// Note: includeVoided parameter is handled by @PropertyGetter methods during serialization
-
-		Patient patient = Strings.isNotEmpty(patientUuid) ? Context.getPatientService().getPatientByUuid(patientUuid)
-				: null;
-		BillStatus billStatus = Strings.isNotEmpty(status) ? BillStatus.valueOf(status.toUpperCase()) : null;
-		CashPoint cashPoint = Strings.isNotEmpty(cashPointUuid)
-				? Context.getService(ICashPointService.class).getByUuid(cashPointUuid)
-				: null;
-		Date createdOnOrBeforeDate = StringUtils.isNotBlank(createdOnOrBeforeDateStr)
-				? (Date) ConversionUtil.convert(createdOnOrBeforeDateStr, Date.class)
-				: null;
-		Date createdOnOrAfterDate = StringUtils.isNotBlank(createdOnOrAfterDateStr)
-				? (Date) ConversionUtil.convert(createdOnOrAfterDateStr, Date.class)
-				: null;
-
+	private BillSearch buildBillSearch(BillSearchRequest searchRequest) {
 		Bill searchTemplate = new Bill();
-		searchTemplate.setPatient(patient);
-		searchTemplate.setStatus(billStatus);
-		searchTemplate.setCashPoint(cashPoint);
-		IBillService service = Context.getService(IBillService.class);
+		searchTemplate.setPatient(resolvePatient(searchRequest.patientUuid));
+		searchTemplate.setReceiptNumber(StringUtils.isNotBlank(searchRequest.receiptNumber) ? searchRequest.receiptNumber
+		        .trim() : null);
+		searchTemplate.setStatus(resolveBillStatus(searchRequest.status));
+		searchTemplate.setCashPoint(resolveCashPoint(searchRequest.cashPointUuid));
 
-		// Get pagination info from context
-		PagingInfo pagingInfo = null;
-		if (context.getLimit() != null && context.getLimit() > 0) {
-			pagingInfo = PagingUtil.getPagingInfoFromContext(context);
-			// Only load total count if explicitly requested
-			if (!requestTotalCount) {
-				pagingInfo.setLoadRecordCount(false);
-			}
+		return new BillSearch(searchTemplate, parseDate(searchRequest.createdOnOrAfter),
+		    parseDate(searchRequest.createdOnOrBefore), Boolean.valueOf(searchRequest.includeVoidedBills),
+		    Boolean.valueOf(searchRequest.includeClosedBills));
+	}
+
+	private PagingInfo buildPagingInfo(RequestContext context, boolean requestTotalCount) {
+		if (context.getLimit() == null || context.getLimit() <= 0) {
+			return null;
 		}
 
-		List<Bill> result = service
-				.getBills(new BillSearch(searchTemplate, createdOnOrAfterDate, createdOnOrBeforeDate,
-						includeVoidedBills, includeClosedBills), pagingInfo);
+		PagingInfo pagingInfo = PagingUtil.getPagingInfoFromContext(context);
+		if (!requestTotalCount) {
+			pagingInfo.setLoadRecordCount(false);
+		}
+		return pagingInfo;
+	}
 
-		// Note: Filtering of voided line items and payments is now handled by the
-		// @PropertyGetter methods (getLineItems and getPayments) during JSON serialization.
-		// This ensures consistent filtering for both search and individual bill retrieval.
-
-		// Use AlreadyPagedWithLength if we have total count, otherwise use AlreadyPaged
+	private AlreadyPaged<Bill> buildPagedResponse(RequestContext context, List<Bill> results, PagingInfo pagingInfo) {
 		if (pagingInfo != null && pagingInfo.getTotalRecordCount() != null) {
 			Boolean hasMoreResults = pagingInfo.hasMoreResults();
-			return new AlreadyPagedWithLength<>(context, result, hasMoreResults != null && hasMoreResults,
-					pagingInfo.getTotalRecordCount());
-		} else {
-			// Fallback to AlreadyPaged if no pagination or total count not available
-			return new AlreadyPaged<>(context, result, false);
+			return new AlreadyPagedWithLength<Bill>(context, results, hasMoreResults != null && hasMoreResults,
+			    pagingInfo.getTotalRecordCount());
+		}
+		return new AlreadyPaged<Bill>(context, results, false);
+	}
+
+	private Patient resolvePatient(String patientUuid) {
+		return Strings.isNotEmpty(patientUuid) ? Context.getPatientService().getPatientByUuid(patientUuid) : null;
+	}
+
+	private CashPoint resolveCashPoint(String cashPointUuid) {
+		return Strings.isNotEmpty(cashPointUuid) ? Context.getService(ICashPointService.class).getByUuid(cashPointUuid)
+		        : null;
+	}
+
+	private BillStatus resolveBillStatus(String status) {
+		return Strings.isNotEmpty(status) ? BillStatus.valueOf(status.toUpperCase()) : null;
+	}
+
+	private Date parseDate(String value) {
+		return StringUtils.isNotBlank(value) ? (Date) ConversionUtil.convert(value, Date.class) : null;
+	}
+
+	private static class BillSearchRequest {
+		private String patientUuid;
+		private String receiptNumber;
+		private String status;
+		private String cashPointUuid;
+		private String createdOnOrBefore;
+		private String createdOnOrAfter;
+		private boolean includeVoidedBills;
+		private boolean includeClosedBills = true;
+		private boolean requestTotalCount;
+
+		private static BillSearchRequest from(RequestContext context) {
+			BillSearchRequest request = new BillSearchRequest();
+			request.patientUuid = context.getRequest().getParameter("patientUuid");
+			request.receiptNumber = context.getRequest().getParameter("receiptNumber");
+			request.status = context.getRequest().getParameter("status");
+			request.cashPointUuid = context.getRequest().getParameter("cashPointUuid");
+			request.createdOnOrBefore = context.getRequest().getParameter("createdOnOrBefore");
+			request.createdOnOrAfter = context.getRequest().getParameter("createdOnOrAfter");
+			request.includeVoidedBills = parseBoolean(context.getRequest().getParameter("includeVoidedBills"), false);
+			request.includeClosedBills = parseBoolean(context.getRequest().getParameter("includeClosedBills"), true);
+			request.requestTotalCount = parseBoolean(context.getRequest().getParameter("totalCount"), false);
+			return request;
+		}
+
+		private static boolean parseBoolean(String value, boolean defaultValue) {
+			return Strings.isNotEmpty(value) ? Boolean.parseBoolean(value) : defaultValue;
 		}
 	}
 

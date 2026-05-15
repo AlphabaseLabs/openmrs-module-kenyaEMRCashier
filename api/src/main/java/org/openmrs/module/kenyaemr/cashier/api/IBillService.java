@@ -22,6 +22,11 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.IEntityDataService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistoryMetricsSummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistorySummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.HistorySearchCriteria;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistoryMetricsSummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistorySummary;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
@@ -157,4 +162,36 @@ public interface IBillService extends IEntityDataService<Bill> {
 	@Transactional(readOnly = true)
 	@Authorized({ PrivilegeConstants.VIEW_BILLS })
 	List<Bill> getAllBillsForPatient(Patient patient);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	List<BillingHistorySummary> getBillingHistory(HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	long getBillingHistoryCount(HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	BillingHistorySummary getBillingHistoryByUuid(String billUuid, HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	BillingHistoryMetricsSummary getBillingHistoryMetrics(HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	List<PaymentHistorySummary> getPaymentHistory(HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	long getPaymentHistoryCount(HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	PaymentHistorySummary getPaymentHistoryByUuid(String paymentUuid, HistorySearchCriteria criteria);
+
+	@Transactional(readOnly = true)
+	@Authorized({ PrivilegeConstants.VIEW_BILLS })
+	PaymentHistoryMetricsSummary getPaymentHistoryMetrics(HistorySearchCriteria criteria);
 }
