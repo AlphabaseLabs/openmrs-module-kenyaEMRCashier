@@ -4,6 +4,7 @@ import org.openmrs.module.kenyaemr.cashier.api.ICashierItemPriceService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataServiceImpl;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
 import org.openmrs.module.kenyaemr.cashier.api.model.CashierItemPrice;
+import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
@@ -21,21 +22,21 @@ public class ICashierItemPriceServiceImpl extends BaseEntityDataServiceImpl<Cash
 
     @Override
     public String getVoidPrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_METADATA;
     }
 
     @Override
     public String getSavePrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_METADATA;
     }
 
     @Override
     public String getPurgePrivilege() {
-        return null;
+        return PrivilegeConstants.PURGE_METADATA;
     }
 
     @Override
     public String getGetPrivilege() {
-        return null;
+        return PrivilegeConstants.VIEW_METADATA;
     }
 }

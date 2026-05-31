@@ -22,6 +22,7 @@ import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataSe
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
 import org.openmrs.module.kenyaemr.cashier.api.base.f.Action1;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
+import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -35,22 +36,22 @@ public class PaymentAttributeServiceImpl extends BaseEntityDataServiceImpl<Payme
 		return new IEntityAuthorizationPrivileges() {
 			@Override
 			public String getVoidPrivilege() {
-				return null;
+				return PrivilegeConstants.MANAGE_BILLS;
 			}
 
 			@Override
 			public String getSavePrivilege() {
-				return null;
+				return PrivilegeConstants.MANAGE_BILLS;
 			}
 
 			@Override
 			public String getPurgePrivilege() {
-				return null;
+				return PrivilegeConstants.PURGE_BILLS;
 			}
 
 			@Override
 			public String getGetPrivilege() {
-				return null;
+				return PrivilegeConstants.VIEW_BILLS;
 			}
 		};
 	}
@@ -91,4 +92,4 @@ public class PaymentAttributeServiceImpl extends BaseEntityDataServiceImpl<Payme
 					paymentAttribute.getAttributeType().getName()));
 		}
 	}
-} 
+}

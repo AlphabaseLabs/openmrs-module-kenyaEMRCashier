@@ -21,6 +21,7 @@ import org.hibernate.Criteria;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.openmrs.Provider;
+import org.openmrs.annotation.Authorized;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.ITimesheetService;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
@@ -75,6 +76,7 @@ public class TimesheetServiceImpl extends BaseEntityDataServiceImpl<Timesheet>
 	}
 
 	@Override
+	@Authorized({ PrivilegeConstants.VIEW_TIMESHEETS })
 	public Timesheet getCurrentTimesheet(Provider cashier) {
 		Criteria criteria = getRepository().createCriteria(Timesheet.class);
 		criteria.add(Restrictions.and(Restrictions.eq("cashier", cashier), Restrictions.isNull(CLOCK_OUT)));

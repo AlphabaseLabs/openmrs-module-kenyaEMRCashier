@@ -107,6 +107,6 @@ public interface IDepositService extends IEntityDataService<Deposit> {
      * @param deposit The deposit to purge.
      * @should purge the deposit
      */
-    @Authorized(PrivilegeConstants.PURGE_DEPOSITS)
+    @Authorized(PrivilegeConstants.MANAGE_DEPOSITS)
     void purge(Deposit deposit);
 }

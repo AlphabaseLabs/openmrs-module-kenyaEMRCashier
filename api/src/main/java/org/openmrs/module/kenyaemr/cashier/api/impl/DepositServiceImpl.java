@@ -20,6 +20,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.DepositTransaction;
 import org.openmrs.module.kenyaemr.cashier.api.model.DepositStatus;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
+import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -51,22 +52,22 @@ public class DepositServiceImpl extends BaseEntityDataServiceImpl<Deposit> imple
 
     @Override
     public String getVoidPrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_DEPOSITS;
     }
 
     @Override
     public String getSavePrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_DEPOSITS;
     }
 
     @Override
     public String getPurgePrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_DEPOSITS;
     }
 
     @Override
     public String getGetPrivilege() {
-        return null;
+        return PrivilegeConstants.VIEW_MANAGE_BILL_DEPOSITS;
     }
 
     @Override

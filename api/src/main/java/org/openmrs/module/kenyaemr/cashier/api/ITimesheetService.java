@@ -40,6 +40,7 @@ public interface ITimesheetService extends IEntityDataService<Timesheet> {
 	 * @should return the most recent timesheet if the cashier is clocked into multiple timesheets
 	 * @should return null if the timesheet is clocked out
 	 */
+	@Authorized({ PrivilegeConstants.VIEW_TIMESHEETS })
 	Timesheet getCurrentTimesheet(Provider cashier);
 
 	/**

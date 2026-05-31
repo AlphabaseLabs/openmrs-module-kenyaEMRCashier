@@ -52,6 +52,6 @@ public interface IDepositTransactionService extends IEntityDataService<DepositTr
      * @param depositTransaction The deposit transaction to purge.
      * @should purge the deposit transaction
      */
-    @Authorized(PrivilegeConstants.PURGE_DEPOSITS)
+    @Authorized(PrivilegeConstants.MANAGE_DEPOSITS)
     void purge(DepositTransaction depositTransaction);
-} 
+}

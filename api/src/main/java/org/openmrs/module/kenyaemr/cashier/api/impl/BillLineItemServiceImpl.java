@@ -18,6 +18,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.OpenmrsObject;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillItemSearch;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
+import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -251,21 +252,21 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 
 	@Override
 	public String getVoidPrivilege() {
-		return null;
+		return PrivilegeConstants.MANAGE_BILLS;
 	}
 
 	@Override
 	public String getSavePrivilege() {
-		return null;
+		return PrivilegeConstants.MANAGE_BILLS;
 	}
 
 	@Override
 	public String getPurgePrivilege() {
-		return null;
+		return PrivilegeConstants.PURGE_BILLS;
 	}
 
 	@Override
 	public String getGetPrivilege() {
-		return null;
+		return PrivilegeConstants.VIEW_BILLS;
 	}
 }

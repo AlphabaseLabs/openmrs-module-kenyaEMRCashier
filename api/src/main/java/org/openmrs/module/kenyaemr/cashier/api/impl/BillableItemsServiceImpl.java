@@ -1,6 +1,7 @@
 package org.openmrs.module.kenyaemr.cashier.api.impl;
 
 import org.hibernate.Criteria;
+import org.openmrs.annotation.Authorized;
 import org.openmrs.module.kenyaemr.cashier.api.IBillableItemsService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataServiceImpl;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
@@ -8,6 +9,7 @@ import org.openmrs.module.kenyaemr.cashier.api.base.f.Action1;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillableService;
 import org.openmrs.OpenmrsObject;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillableServiceSearch;
+import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ public class BillableItemsServiceImpl extends BaseEntityDataServiceImpl<Billable
         , IBillableItemsService {
 
     @Override
+    @Authorized({ PrivilegeConstants.VIEW_METADATA })
     public List<BillableService> findServices(final BillableServiceSearch serviceSearch) {
         return executeCriteria(BillableService.class, null, new Action1<Criteria>() {
             @Override
@@ -55,21 +58,21 @@ public class BillableItemsServiceImpl extends BaseEntityDataServiceImpl<Billable
 
     @Override
     public String getVoidPrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_METADATA;
     }
 
     @Override
     public String getSavePrivilege() {
-        return null;
+        return PrivilegeConstants.MANAGE_METADATA;
     }
 
     @Override
     public String getPurgePrivilege() {
-        return null;
+        return PrivilegeConstants.PURGE_METADATA;
     }
 
     @Override
     public String getGetPrivilege() {
-        return null;
+        return PrivilegeConstants.VIEW_METADATA;
     }
 }
