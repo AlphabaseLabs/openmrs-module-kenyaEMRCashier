@@ -43,6 +43,7 @@ import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
+import org.openmrs.OpenmrsData;
 import org.openmrs.OpenmrsObject;
 import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
@@ -77,6 +78,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.PaymentMethodTotalSummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.Timesheet;
 import org.openmrs.module.kenyaemr.cashier.api.model.TransactionType;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentAttributeService;
+import org.openmrs.module.kenyaemr.cashier.api.base.exception.PrivilegeException;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
@@ -96,6 +98,7 @@ import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashMap;
@@ -237,6 +240,56 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				attribute.setOwner(payment);
 			}
 		}
+	}
+
+	@Override
+	@Transactional
+	public Bill voidEntity(Bill bill, final String reason) {
+		boolean canDeleteAnyBill = hasBillDeletePrivilege(PrivilegeConstants.FORCE_DELETE_BILLS);
+		if (!canDeleteAnyBill && !hasBillDeletePrivilege(PrivilegeConstants.MANAGE_BILLS)) {
+			throw new PrivilegeException();
+		}
+
+		if (bill == null) {
+			throw new NullPointerException("The entity to void cannot be null.");
+		}
+		if (StringUtils.isEmpty(reason)) {
+			throw new IllegalArgumentException("The reason to void must be defined.");
+		}
+		if (BillStatus.PAID.equals(bill.getStatus()) && !canDeleteAnyBill) {
+			throw new AccessControlException("Access denied to delete a paid bill.");
+		}
+
+		final User user = getAuthenticatedUser();
+		final Date dateVoided = new Date();
+		setVoidProperties(bill, reason, user, dateVoided);
+
+		List<OpenmrsData> updatedObjects = executeOnRelatedObjects(OpenmrsData.class, bill, new Action1<OpenmrsData>() {
+			@Override
+			public void apply(OpenmrsData data) {
+				setVoidProperties(data, reason, user, dateVoided);
+			}
+		});
+
+		validate(bill);
+		if (!updatedObjects.isEmpty()) {
+			Collection<OpenmrsObject> saveAll = new ArrayList<OpenmrsObject>();
+			saveAll.add(bill);
+			saveAll.addAll(updatedObjects);
+			getRepository().saveAll(saveAll);
+		} else {
+			getRepository().save(bill);
+		}
+
+		return bill;
+	}
+
+	protected boolean hasBillDeletePrivilege(String privilege) {
+		return Context.hasPrivilege(privilege);
+	}
+
+	protected User getAuthenticatedUser() {
+		return Context.getAuthenticatedUser();
 	}
 
 	/**

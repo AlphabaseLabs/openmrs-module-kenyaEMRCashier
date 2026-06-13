@@ -237,6 +237,11 @@
 	</privilege>
 
 	<privilege>
+		<name>Force Delete Cashier Bills</name>
+		<description>Able to delete cashier bills regardless of bill status</description>
+	</privilege>
+
+	<privilege>
 		<name>Close Cashier Bills</name>
 		<description>Able to manually close bills to prevent new items from being added</description>
 	</privilege>

@@ -32,6 +32,14 @@ The KenyaEMR Cashier Module is an OpenMRS module that provides comprehensive cas
 - Order expansion module integration
 - REST API support for external systems
 
+## Privileges
+
+### Bill Deletion
+- `Manage Cashier Bills`: Allows users to create, edit, and delete cashier bills, except bills with `PAID` status.
+- `Force Delete Cashier Bills`: Allows trusted users to delete cashier bills regardless of status, including `PAID` bills.
+
+Assign `Force Delete Cashier Bills` only to administrative or audit-controlled roles because it bypasses the normal paid-bill deletion restriction.
+
 ## Installation
 
 1. Download the latest release from the [releases page](https://github.com/palladiumkenya/openmrs-module-kenyaEMRCashier/releases)

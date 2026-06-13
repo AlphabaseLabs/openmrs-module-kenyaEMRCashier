@@ -34,6 +34,7 @@ public class PrivilegeConstants {
 	public static final String ADJUST_BILLS = "Adjust Cashier Bills";
 	public static final String VIEW_BILLS = "View Cashier Bills";
 	public static final String PURGE_BILLS = "Purge Cashier Bills";
+	public static final String FORCE_DELETE_BILLS = "Force Delete Cashier Bills";
 	public static final String CLOSE_BILLS = "Close Cashier Bills";
 	public static final String REOPEN_BILLS = "Reopen Cashier Bills";
 
@@ -62,11 +63,11 @@ public class PrivilegeConstants {
 	public static final String VIEW_MANAGE_BILL_DEPOSITS = "o3: View Manage Bill Deposits";
 
 	public static final String[] PRIVILEGE_NAMES = new String[] { MANAGE_BILLS, ADJUST_BILLS, VIEW_BILLS, PURGE_BILLS,
-	        CLOSE_BILLS, REOPEN_BILLS, REFUND_MONEY, REPRINT_RECEIPT, MANAGE_TIMESHEETS, VIEW_TIMESHEETS, PURGE_TIMESHEETS, MANAGE_METADATA,
-	        VIEW_METADATA, PURGE_METADATA, APP_VIEW_CASHIER_APP, TASK_CREATE_NEW_BILL_PAGE, TASK_ADJUST_CASHIER_BILL,
-	        TASK_CASHIER_TIMESHEETS_PAGE, TASK_MANAGE_CASHIER_MODULE_PAGE, TASK_MANAGE_CASHIER_METADATA,
-	        TASK_CASHIER_TIMESHEETS_PAGE, TASK_MANAGE_CASHIER_MODULE_PAGE, TASK_VIEW_CASHIER_REPORTS,
-	        APP_ACCESS_CASHIER_TASKS_PAGE };
+	        FORCE_DELETE_BILLS, CLOSE_BILLS, REOPEN_BILLS, REFUND_MONEY, REPRINT_RECEIPT, MANAGE_TIMESHEETS,
+	        VIEW_TIMESHEETS, PURGE_TIMESHEETS, MANAGE_METADATA, VIEW_METADATA, PURGE_METADATA, APP_VIEW_CASHIER_APP,
+	        TASK_CREATE_NEW_BILL_PAGE, TASK_ADJUST_CASHIER_BILL, TASK_CASHIER_TIMESHEETS_PAGE,
+	        TASK_MANAGE_CASHIER_MODULE_PAGE, TASK_MANAGE_CASHIER_METADATA, TASK_CASHIER_TIMESHEETS_PAGE,
+	        TASK_MANAGE_CASHIER_MODULE_PAGE, TASK_VIEW_CASHIER_REPORTS, APP_ACCESS_CASHIER_TASKS_PAGE };
 
 	private static PrivilegeConstantsCompatibility getPrivilegeConstantsCompatibility() {
 		if (privilegeConstantsCompatibility == null) {
@@ -99,12 +100,13 @@ public class PrivilegeConstants {
 	 * @return A set containing the default set of privileges.
 	 */
 	public static Set<Privilege> getDefaultPrivileges() {
-		Set<Privilege> privileges = getModulePrivileges();
-
 		UserService service = Context.getUserService();
 		if (service == null) {
 			throw new IllegalStateException("The OpenMRS user service cannot be loaded.");
 		}
+
+		Set<Privilege> privileges = getModulePrivileges();
+		privileges.remove(service.getPrivilege(FORCE_DELETE_BILLS));
 
 		List<String> names = new ArrayList<String>();
 		// Add other required cashier privileges
