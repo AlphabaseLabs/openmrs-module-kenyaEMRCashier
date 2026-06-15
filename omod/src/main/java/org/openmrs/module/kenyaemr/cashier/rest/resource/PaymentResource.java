@@ -20,6 +20,7 @@ import org.openmrs.module.stockmanagement.api.model.StockItem;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentModeService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
@@ -178,11 +179,55 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		IBillService service = Context.getService(IBillService.class);
 		Bill bill = delegate.getBill();
 		bill.addPayment(delegate);
+		normalizePaymentAllocations(delegate, bill);
 		// Synchronize the bill status based on the current payments and deposits
 		bill.synchronizeBillStatus();
 		service.save(bill);
 
 		return delegate;
+	}
+
+	private void normalizePaymentAllocations(Payment payment, Bill bill) {
+		if (payment == null || payment.getAllocations() == null) {
+			return;
+		}
+
+		for (LinePaymentAllocation allocation : payment.getAllocations()) {
+			if (allocation == null) {
+				continue;
+			}
+			if (allocation.getAllocatedAmount() == null) {
+				throw new IllegalArgumentException("Payment allocation amount must be defined.");
+			}
+
+			BillLineItem lineItem = findBillLineItem(bill, allocation);
+			allocation.setBill(bill);
+			allocation.setPayment(payment);
+			lineItem.addAllocation(allocation);
+			lineItem.synchronizePaymentStatus();
+		}
+	}
+
+	private BillLineItem findBillLineItem(Bill bill, LinePaymentAllocation allocation) {
+		if (bill == null || bill.getLineItems() == null || allocation == null || allocation.getBillLineItem() == null) {
+			throw new IllegalArgumentException("Payment allocation billLineItem must be defined.");
+		}
+
+		String lineItemUuid = allocation.getBillLineItem().getUuid();
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem == null) {
+				continue;
+			}
+			if (lineItem == allocation.getBillLineItem()) {
+				return lineItem;
+			}
+			if (lineItemUuid != null && lineItemUuid.equals(lineItem.getUuid())) {
+				allocation.setBillLineItem(lineItem);
+				return lineItem;
+			}
+		}
+
+		throw new IllegalArgumentException("Payment allocation billLineItem must belong to the bill.");
 	}
 
 	@Override
