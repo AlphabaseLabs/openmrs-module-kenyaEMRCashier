@@ -1522,4 +1522,71 @@
 		</createIndex>
 	</changeSet>
 
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-01" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="cashier_bill_line_item" columnName="original_price" />
+			</not>
+		</preConditions>
+		<comment>Add original price for bill line item price override tracking</comment>
+		<addColumn tableName="cashier_bill_line_item">
+			<column name="original_price" type="decimal(10,2)" />
+		</addColumn>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-02" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="cashier_bill_line_item" columnName="price_overridden" />
+			</not>
+		</preConditions>
+		<comment>Add backend-computed price override flag to bill line items</comment>
+		<addColumn tableName="cashier_bill_line_item">
+			<column name="price_overridden" type="boolean" defaultValueBoolean="false">
+				<constraints nullable="false" />
+			</column>
+		</addColumn>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-03" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="cashier_bill_line_item" columnName="price_override_reason" />
+			</not>
+		</preConditions>
+		<comment>Add optional price override reason to bill line items</comment>
+		<addColumn tableName="cashier_bill_line_item">
+			<column name="price_override_reason" type="varchar(500)" />
+		</addColumn>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-04" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<and>
+				<columnExists tableName="cashier_bill_line_item" columnName="original_price" />
+				<columnExists tableName="cashier_bill_line_item" columnName="price_overridden" />
+			</and>
+		</preConditions>
+		<comment>Backfill existing bill line items as not price-overridden</comment>
+		<sql>
+			UPDATE cashier_bill_line_item
+			SET original_price = price, price_overridden = 0
+			WHERE original_price IS NULL
+		</sql>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-05" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<indexExists tableName="cashier_bill_line_item" indexName="cashier_bill_line_item_price_override_idx" />
+			</not>
+		</preConditions>
+		<comment>Add index for finding bills with overridden line item prices</comment>
+		<createIndex indexName="cashier_bill_line_item_price_override_idx" tableName="cashier_bill_line_item">
+			<column name="price_overridden" />
+			<column name="bill_id" />
+			<column name="voided" />
+		</createIndex>
+	</changeSet>
+
 </databaseChangeLog>

@@ -35,6 +35,9 @@ public class BillLineItem extends BaseOpenmrsData {
 	private String itemOrServiceConceptUuid;
 	private String serviceTypeUuid;
 	private BigDecimal price;
+	private BigDecimal originalPrice;
+	private Boolean priceOverridden = false;
+	private String priceOverrideReason;
 	private String priceName;
 	private CashierItemPrice itemPrice;
 	private Integer quantity;
@@ -148,6 +151,41 @@ public class BillLineItem extends BaseOpenmrsData {
 
 	public void setPrice(BigDecimal price) {
 		this.price = price;
+	}
+
+	public BigDecimal getOriginalPrice() {
+		return originalPrice;
+	}
+
+	public void setOriginalPrice(BigDecimal originalPrice) {
+		this.originalPrice = originalPrice;
+	}
+
+	public Boolean getPriceOverridden() {
+		return priceOverridden;
+	}
+
+	public void setPriceOverridden(Boolean priceOverridden) {
+		this.priceOverridden = priceOverridden;
+	}
+
+	public String getPriceOverrideReason() {
+		return priceOverrideReason;
+	}
+
+	public void setPriceOverrideReason(String priceOverrideReason) {
+		this.priceOverrideReason = priceOverrideReason;
+	}
+
+	public void normalizePriceOverride() {
+		if (originalPrice == null && price != null) {
+			originalPrice = price;
+		}
+		if (price == null || originalPrice == null) {
+			priceOverridden = false;
+			return;
+		}
+		priceOverridden = price.compareTo(originalPrice) != 0;
 	}
 
 	public String getPriceName() {
