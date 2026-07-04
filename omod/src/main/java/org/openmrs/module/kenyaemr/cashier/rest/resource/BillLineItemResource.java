@@ -169,10 +169,8 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
                 if (itemPrice != null) {
                     boolean priceOptionChanged = isPriceOptionChanged(instance, uuid);
                     instance.setItemPrice(itemPrice);
-                    if (priceOptionChanged || instance.getOriginalPrice() == null) {
+                    if (priceOptionChanged || instance.getOriginalPrice() == null || instance.getPrice() == null) {
                         instance.setOriginalPrice(itemPrice.getPrice());
-                    }
-                    if (instance.getPrice() == null) {
                         instance.setPrice(itemPrice.getPrice());
                     }
                     instance.setPriceName(itemPrice.getName());
