@@ -242,6 +242,17 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		}
 	}
 
+	private void normalizeLineItemPriceOverrides(Bill bill) {
+		if (bill == null || bill.getLineItems() == null) {
+			return;
+		}
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem != null) {
+				lineItem.normalizePriceOverride();
+			}
+		}
+	}
+
 	@Override
 	@Transactional
 	public Bill voidEntity(Bill bill, final String reason) {
@@ -350,6 +361,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		// If the bill has an ID, it's an update operation - save it directly
 		if (bill.getId() != null) {
 			LOG.info("Updating existing bill: " + bill.getReceiptNumber() + " with ID: " + bill.getId() + " and status: " + bill.getStatus());
+			normalizeLineItemPriceOverrides(bill);
 			allocatePaymentsToLineItems(bill);
 			return super.save(bill);
 		}
@@ -363,6 +375,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			if (billToUpdate.isClosed() || billToUpdate.getVoided()) {
 				// If the bill is closed or voided, create a new bill instead of adding to the existing one
 				LOG.info("Bill " + billToUpdate.getReceiptNumber() + " is closed or voided. Creating new bill for patient " + bill.getPatient().getPatientId());
+				normalizeLineItemPriceOverrides(bill);
 				allocatePaymentsToLineItems(bill);
 				return super.save(bill);
 			}
@@ -407,12 +420,14 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			}
 			// appending items to existing non-closed bill
 			LOG.info("Adding " + itemsToAdd.size() + " items to existing bill: " + billToUpdate.getReceiptNumber());
+			normalizeLineItemPriceOverrides(billToUpdate);
 			allocatePaymentsToLineItems(billToUpdate);
 			return super.save(billToUpdate);
 		} else {
 			LOG.info("No existing bills found for patient " + bill.getPatient().getPatientId() + ", creating new bill");
 		}
 
+		normalizeLineItemPriceOverrides(bill);
 		allocatePaymentsToLineItems(bill);
 		return super.save(bill);
 	}
@@ -1766,6 +1781,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		if (bill.getLineItems() != null) {
 			for (BillLineItem lineItem : bill.getLineItems()) {
 				if (lineItem != null) {
+					lineItem.normalizePriceOverride();
 					lineItem.synchronizePaymentStatus();
 				}
 			}

@@ -64,14 +64,22 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 
 	@Override
 	public BillLineItem save(BillLineItem object) {
+		normalizePriceOverride(object);
 		applyTaxes(object);
 		return super.save(object);
 	}
 
 	@Override
 	public BillLineItem saveAll(BillLineItem object, Collection<? extends OpenmrsObject> related) {
+		normalizePriceOverride(object);
 		applyTaxes(object);
 		return super.saveAll(object, related);
+	}
+
+	private void normalizePriceOverride(BillLineItem object) {
+		if (object != null) {
+			object.normalizePriceOverride();
+		}
 	}
 
 	@Override

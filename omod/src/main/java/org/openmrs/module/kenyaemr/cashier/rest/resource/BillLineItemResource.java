@@ -84,6 +84,9 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
             description.addProperty("billableService", Representation.REF);
             description.addProperty("quantity");
             description.addProperty("price");
+            description.addProperty("originalPrice");
+            description.addProperty("priceOverridden");
+            description.addProperty("priceOverrideReason");
             description.addProperty("priceName");
             description.addProperty("priceUuid");
             description.addProperty("lineItemOrder");
@@ -164,11 +167,16 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
                 ICashierItemPriceService itemPriceService = Context.getService(ICashierItemPriceService.class);
                 CashierItemPrice itemPrice = itemPriceService.getByUuid(uuid);
                 if (itemPrice != null) {
+                    boolean priceOptionChanged = isPriceOptionChanged(instance, uuid);
                     instance.setItemPrice(itemPrice);
+                    if (priceOptionChanged || instance.getOriginalPrice() == null) {
+                        instance.setOriginalPrice(itemPrice.getPrice());
+                    }
                     if (instance.getPrice() == null) {
                         instance.setPrice(itemPrice.getPrice());
                     }
                     instance.setPriceName(itemPrice.getName());
+                    instance.normalizePriceOverride();
                     // Also set billableService from itemPrice if not already set
                     if (instance.getBillableService() == null && itemPrice.getBillableService() != null) {
                         instance.setBillableService(itemPrice.getBillableService());
@@ -181,6 +189,41 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
                 LOG.error("Error retrieving CashierItemPrice for UUID: " + uuid, e);
             }
         }
+    }
+
+    private boolean isPriceOptionChanged(BillLineItem instance, String newUuid) {
+        if (instance == null || StringUtils.isBlank(newUuid)) {
+            return false;
+        }
+        CashierItemPrice currentPrice = instance.getItemPrice();
+        if (currentPrice == null) {
+            return true;
+        }
+        try {
+            return !newUuid.equals(currentPrice.getUuid());
+        } catch (org.hibernate.ObjectNotFoundException e) {
+            return true;
+        }
+    }
+
+    @PropertySetter(value = "originalPrice")
+    public void setOriginalPrice(BillLineItem instance, Object originalPrice) {
+        instance.setOriginalPrice(parseBigDecimal(originalPrice));
+    }
+
+    @PropertyGetter(value = "priceOverridden")
+    public Boolean getPriceOverridden(BillLineItem instance) {
+        return Boolean.TRUE.equals(instance.getPriceOverridden());
+    }
+
+    @PropertySetter(value = "priceOverridden")
+    public void setPriceOverridden(BillLineItem instance, Object priceOverridden) {
+        // Backend-owned computed field; ignore client payload.
+    }
+
+    @PropertySetter(value = "priceOverrideReason")
+    public void setPriceOverrideReason(BillLineItem instance, String priceOverrideReason) {
+        instance.setPriceOverrideReason(priceOverrideReason);
     }
 
     @PropertyGetter(value = "priceUuid")
