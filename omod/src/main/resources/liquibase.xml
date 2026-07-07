@@ -1524,9 +1524,12 @@
 
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-01" author="furusiyya">
 		<preConditions onFail="MARK_RAN">
-			<not>
-				<columnExists tableName="cashier_bill_line_item" columnName="original_price" />
-			</not>
+			<sqlCheck expectedResult="0">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill_line_item')
+				AND UPPER(column_name) = UPPER('original_price')
+			</sqlCheck>
 		</preConditions>
 		<comment>Add original price for bill line item price override tracking</comment>
 		<addColumn tableName="cashier_bill_line_item">
@@ -1536,9 +1539,12 @@
 
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-02" author="furusiyya">
 		<preConditions onFail="MARK_RAN">
-			<not>
-				<columnExists tableName="cashier_bill_line_item" columnName="price_overridden" />
-			</not>
+			<sqlCheck expectedResult="0">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill_line_item')
+				AND UPPER(column_name) = UPPER('price_overridden')
+			</sqlCheck>
 		</preConditions>
 		<comment>Add backend-computed price override flag to bill line items</comment>
 		<addColumn tableName="cashier_bill_line_item">
@@ -1550,9 +1556,12 @@
 
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-03" author="furusiyya">
 		<preConditions onFail="MARK_RAN">
-			<not>
-				<columnExists tableName="cashier_bill_line_item" columnName="price_override_reason" />
-			</not>
+			<sqlCheck expectedResult="0">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill_line_item')
+				AND UPPER(column_name) = UPPER('price_override_reason')
+			</sqlCheck>
 		</preConditions>
 		<comment>Add optional price override reason to bill line items</comment>
 		<addColumn tableName="cashier_bill_line_item">
@@ -1562,23 +1571,30 @@
 
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-04" author="furusiyya">
 		<preConditions onFail="MARK_RAN">
-			<and>
-				<columnExists tableName="cashier_bill_line_item" columnName="original_price" />
-				<columnExists tableName="cashier_bill_line_item" columnName="price_overridden" />
-			</and>
+			<sqlCheck expectedResult="2">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill_line_item')
+				AND UPPER(column_name) IN (UPPER('original_price'), UPPER('price_overridden'))
+			</sqlCheck>
 		</preConditions>
 		<comment>Backfill existing bill line items as not price-overridden</comment>
 		<sql>
 			UPDATE cashier_bill_line_item
-			SET original_price = price, price_overridden = 0
+			SET original_price = price
 			WHERE original_price IS NULL
+		</sql>
+		<sql>
+			UPDATE cashier_bill_line_item
+			SET price_overridden = 0
+			WHERE price_overridden IS NULL
 		</sql>
 	</changeSet>
 
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-05" author="furusiyya">
 		<preConditions onFail="MARK_RAN">
 			<not>
-				<indexExists tableName="cashier_bill_line_item" indexName="cashier_bill_line_item_price_override_idx" />
+				<indexExists indexName="cashier_bill_line_item_price_override_idx" />
 			</not>
 		</preConditions>
 		<comment>Add index for finding bills with overridden line item prices</comment>
@@ -1589,16 +1605,58 @@
 		</createIndex>
 	</changeSet>
 
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-inline-price-editing-06" author="furusiyya">
+		<preConditions onFail="MARK_RAN">
+			<sqlCheck expectedResult="2">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill_line_item')
+				AND UPPER(column_name) IN (UPPER('original_price'), UPPER('price_overridden'))
+			</sqlCheck>
+		</preConditions>
+		<comment>Ensure legacy bill line item price override defaults are backfilled</comment>
+		<sql>
+			UPDATE cashier_bill_line_item
+			SET original_price = price
+			WHERE original_price IS NULL
+		</sql>
+		<sql>
+			UPDATE cashier_bill_line_item
+			SET price_overridden = 0
+			WHERE price_overridden IS NULL
+		</sql>
+	</changeSet>
+
 	<changeSet id="kenyaemr.cashier-001-v4.2.6-additional-discount-01" author="codex">
 		<preConditions onFail="MARK_RAN">
-			<not>
-				<columnExists tableName="cashier_bill" columnName="additional_discount" />
-			</not>
+			<sqlCheck expectedResult="0">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill')
+				AND UPPER(column_name) = UPPER('additional_discount')
+			</sqlCheck>
 		</preConditions>
 		<comment>Add bill-level additional discount amount</comment>
 		<addColumn tableName="cashier_bill">
 			<column name="additional_discount" type="decimal(10,2)" defaultValueNumeric="0.00" />
 		</addColumn>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-additional-discount-02" author="codex">
+		<preConditions onFail="MARK_RAN">
+			<sqlCheck expectedResult="1">
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE UPPER(table_schema) = UPPER(SCHEMA())
+				AND UPPER(table_name) = UPPER('cashier_bill')
+				AND UPPER(column_name) = UPPER('additional_discount')
+			</sqlCheck>
+		</preConditions>
+		<comment>Ensure legacy bills default additional discount to zero</comment>
+		<sql>
+			UPDATE cashier_bill
+			SET additional_discount = 0.00
+			WHERE additional_discount IS NULL
+		</sql>
 	</changeSet>
 
 </databaseChangeLog>
