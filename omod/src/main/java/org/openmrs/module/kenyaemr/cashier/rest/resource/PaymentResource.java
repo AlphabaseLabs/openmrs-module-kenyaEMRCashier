@@ -178,6 +178,7 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	public Payment save(Payment delegate) {
 		IBillService service = Context.getService(IBillService.class);
 		Bill bill = delegate.getBill();
+		validatePaymentAmountAgainstBalance(delegate, bill);
 		bill.addPayment(delegate);
 		normalizePaymentAllocations(delegate, bill);
 		// Synchronize the bill status based on the current payments and deposits
@@ -185,6 +186,22 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		service.save(bill);
 
 		return delegate;
+	}
+
+	private void validatePaymentAmountAgainstBalance(Payment payment, Bill bill) {
+		if (payment == null || bill == null) {
+			return;
+		}
+
+		BigDecimal paymentAmount = payment.getAmountTendered() != null ? payment.getAmountTendered() : payment.getAmount();
+		if (paymentAmount == null || paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+			return;
+		}
+
+		BigDecimal balance = bill.getBalance();
+		if (paymentAmount.compareTo(balance) > 0) {
+			throw new IllegalArgumentException("Payment amount cannot exceed bill balance.");
+		}
 	}
 
 	private void normalizePaymentAllocations(Payment payment, Bill bill) {

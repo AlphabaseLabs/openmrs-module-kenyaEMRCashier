@@ -24,13 +24,20 @@
 	<cashier_billable_service service_id="8103" name="REST Smoke Service 4" short_name="RSS4" service_status="ENABLED"
 	                          creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
 	                          uuid="81000000-0000-0000-0000-000000000104" />
-	<cashier_billable_service service_id="8104" name="REST Smoke Service 5" short_name="RSS5" service_status="ENABLED"
-	                          creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
-	                          uuid="81000000-0000-0000-0000-000000000105" />
+		<cashier_billable_service service_id="8104" name="REST Smoke Service 5" short_name="RSS5" service_status="ENABLED"
+		                          creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
+		                          uuid="81000000-0000-0000-0000-000000000105" />
 
-	<cashier_item_price item_price_id="8100" service_id="8100" payment_mode="8100" name="Standard 100" price="100.00"
-	                    creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
-	                    uuid="81000000-0000-0000-0000-000000000201" />
+		<cashier_tax_type tax_type_id="8100" concept_id="3" rate="0.10" inclusive="false"
+		                  creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
+		                  uuid="81000000-0000-0000-0000-000000000601" />
+		<cashier_billable_service_tax service_tax_id="8100" service_id="8103" tax_type_id="8100"
+		                              priority="0" creator="1" date_created="2012-01-01 00:00:00.0"
+		                              voided="false" uuid="81000000-0000-0000-0000-000000000602" />
+
+		<cashier_item_price item_price_id="8100" service_id="8100" payment_mode="8100" name="Standard 100" price="100.00"
+		                    creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
+		                    uuid="81000000-0000-0000-0000-000000000201" />
 	<cashier_item_price item_price_id="8101" service_id="8101" payment_mode="8100" name="Standard 200" price="200.00"
 	                    creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
 	                    uuid="81000000-0000-0000-0000-000000000202" />
@@ -50,9 +57,9 @@
 	                    creator="1" date_created="2012-01-01 00:00:00.0" voided="false"
 	                    uuid="81000000-0000-0000-0000-000000000207" />
 
-	<cashier_bill bill_id="8100" receipt_number="REST-SMOKE-LEGACY" provider_id="1" patient_id="2"
-	              cash_point_id="8100" status="PENDING" creator="1" date_created="2012-01-01 00:00:00.0"
-	              voided="false" uuid="81000000-0000-0000-0000-000000000301" receipt_printed="0" closed="false" />
+		<cashier_bill bill_id="8100" receipt_number="REST-SMOKE-LEGACY" provider_id="1" patient_id="2"
+		              cash_point_id="8100" status="PENDING" creator="1" date_created="2012-01-01 00:00:00.0"
+		              voided="false" uuid="81000000-0000-0000-0000-000000000301" receipt_printed="0" closed="true" />
 	<cashier_bill_line_item bill_line_item_id="8100" bill_id="8100" service_id="8100" price_id="8100"
 	                        price="100.00" original_price="100.00" price_overridden="false" price_name="Standard 100"
 	                        quantity="1" line_item_order="0" payment_status="PENDING"

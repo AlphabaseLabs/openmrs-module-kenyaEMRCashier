@@ -64,7 +64,83 @@ public class BillStatusSynchronizationTest {
 	}
 
 	@Test
-	public void synchronizeStatuses_shouldRefreshLineItemAndBillStatusFromAllocations() {
+	public void getBalance_shouldSubtractAdditionalDiscountWithoutChangingBillTotal() {
+		BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
+		Bill bill = createBill(lineItem);
+		bill.setAdditionalDiscount(BigDecimal.valueOf(50));
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(0, bill.getTotal().compareTo(BigDecimal.valueOf(300)));
+		assertEquals(0, bill.getAdditionalDiscount().compareTo(BigDecimal.valueOf(50)));
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(250)));
+		assertEquals(BillStatus.PENDING, bill.getStatus());
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillPaidWhenPaymentCoversDiscountedTotal() {
+		BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
+		Bill bill = createBill(lineItem);
+		bill.setAdditionalDiscount(BigDecimal.valueOf(50));
+
+			Payment payment = new Payment();
+			payment.setAmount(BigDecimal.valueOf(250));
+			payment.setAmountTendered(BigDecimal.valueOf(250));
+			payment.setVoided(false);
+			payment.setBill(bill);
+			bill.setPayments(Collections.singleton(payment));
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
+		assertEquals(BillStatus.PAID, bill.getStatus());
+	}
+
+	@Test
+	public void getAdditionalDiscountEligibleAmount_shouldUsePendingAndPostedUnpaidLineAmountsOnly() {
+		BillLineItem pendingLine = createLineItemWithStatus(BigDecimal.valueOf(100), BillStatus.PENDING, BigDecimal.ZERO);
+		BillLineItem postedLine = createLineItemWithStatus(BigDecimal.valueOf(200), BillStatus.POSTED, BigDecimal.valueOf(50));
+		BillLineItem paidLine = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PAID, BigDecimal.ZERO);
+		BillLineItem exemptedLine = createLineItemWithStatus(BigDecimal.valueOf(400), BillStatus.EXEMPTED, BigDecimal.ZERO);
+		Bill bill = createBill(pendingLine, postedLine, paidLine, exemptedLine);
+
+		assertEquals(0, bill.getAdditionalDiscountEligibleAmount().compareTo(BigDecimal.valueOf(250)));
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void validateAdditionalDiscountAmount_shouldRejectDiscountGreaterThanEligibleUnpaidAmount() {
+		BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(100), BillStatus.PENDING, BigDecimal.ZERO);
+		Bill bill = createBill(lineItem);
+
+			bill.validateAdditionalDiscountAmount(BigDecimal.valueOf(101));
+		}
+
+		@Test
+		public void updateAdditionalDiscount_shouldRecalculateBalanceAndStatusWhenDiscountIsCleared() {
+			BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
+			Bill bill = createBill(lineItem);
+			bill.setAdditionalDiscount(BigDecimal.valueOf(100));
+
+			Payment payment = new Payment();
+			payment.setAmount(BigDecimal.valueOf(200));
+			payment.setAmountTendered(BigDecimal.valueOf(200));
+			payment.setVoided(false);
+			payment.setBill(bill);
+			bill.setPayments(Collections.singleton(payment));
+
+			bill.synchronizeBillStatus();
+			assertEquals(BillStatus.PAID, bill.getStatus());
+			assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
+
+			bill.updateAdditionalDiscount(BigDecimal.ZERO);
+
+			assertEquals(0, bill.getAdditionalDiscount().compareTo(BigDecimal.ZERO));
+			assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(100)));
+			assertEquals(BillStatus.POSTED, bill.getStatus());
+		}
+
+		@Test
+		public void synchronizeStatuses_shouldRefreshLineItemAndBillStatusFromAllocations() {
 		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(2000), BigDecimal.ZERO);
 		lineItem.setPaymentStatus(BillStatus.PENDING);
 
@@ -76,9 +152,10 @@ public class BillStatusSynchronizationTest {
 		lineItem.setBill(bill);
 
 		Payment payment = new Payment();
-		payment.setAmount(BigDecimal.valueOf(2000));
-		payment.setAmountTendered(BigDecimal.valueOf(2000));
-		payment.setAllocations(Collections.singleton(allocation));
+			payment.setAmount(BigDecimal.valueOf(2000));
+			payment.setAmountTendered(BigDecimal.valueOf(2000));
+			payment.setVoided(false);
+			payment.setAllocations(Collections.singleton(allocation));
 		payment.setBill(bill);
 
 		allocation.setBill(bill);
@@ -106,6 +183,30 @@ public class BillStatusSynchronizationTest {
 			discount.setAdjustmentType("DISCOUNT");
 			discount.setAmount(discountAmount);
 			lineItem.setAdjustments(Arrays.asList(discount));
+		}
+
+		return lineItem;
+	}
+
+	private Bill createBill(BillLineItem... lineItems) {
+		Bill bill = new Bill();
+		bill.setLineItems(Arrays.asList(lineItems));
+		for (BillLineItem lineItem : lineItems) {
+			lineItem.setBill(bill);
+		}
+		return bill;
+	}
+
+	private BillLineItem createLineItemWithStatus(BigDecimal price, BillStatus status, BigDecimal allocatedAmount) {
+		BillLineItem lineItem = new BillLineItem();
+		lineItem.setPrice(price);
+		lineItem.setQuantity(1);
+		lineItem.setPaymentStatus(status);
+
+		if (allocatedAmount.compareTo(BigDecimal.ZERO) > 0) {
+			LinePaymentAllocation allocation = new LinePaymentAllocation();
+			allocation.setAllocatedAmount(allocatedAmount);
+			lineItem.setAllocations(Collections.singleton(allocation));
 		}
 
 		return lineItem;

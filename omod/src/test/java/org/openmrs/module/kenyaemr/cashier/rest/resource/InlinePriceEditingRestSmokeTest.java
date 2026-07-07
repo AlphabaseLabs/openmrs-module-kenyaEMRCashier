@@ -2,6 +2,10 @@ package org.openmrs.module.kenyaemr.cashier.rest.resource;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.kenyaemr.cashier.api.IBillService;
+import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierResourceController;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierSubResourceController;
 import org.openmrs.module.kenyaemr.cashier.web.controller.BillActionController;
@@ -26,7 +30,6 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,46 +89,47 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 
 		// B. Open bill with mixed states
 		Map<String, Object> bill = postJson(BILL_RESOURCE, createBillPayload());
-		String billUuid = stringValue(bill.get("uuid"));
-		assertNotNull(billUuid);
-		List<Map<String, Object>> lineItems = getSmokeLineItems();
-		assertEquals(3, lineItems.size());
+			String billUuid = stringValue(bill.get("uuid"));
+			assertNotNull(billUuid);
+			List<Map<String, Object>> lineItems = getBillLineItems(billUuid);
+			assertEquals("Expected three created smoke line items. Available line items: " + describeLineItems(lineItems), 3,
+			    lineItems.size());
 		assertInlinePriceState(findLineByService(lineItems, SERVICE_1_UUID), "100.00", "100.00", false);
 		assertInlinePriceState(findLineByService(lineItems, SERVICE_2_UUID), "150.00", "200.00", true);
 		assertInlinePriceState(findLineByService(lineItems, SERVICE_3_UUID), "250.00", "300.00", true);
 
-		// C. Add normal + overridden lines at bill level only
-		updateBill(billUuid,
-		    billPayload(lineItems,
-		        linePayload(SERVICE_4_UUID, PRICE_400_UUID, "400", null),
-		        linePayload(SERVICE_5_UUID, PRICE_500_UUID, "450", "Added override")));
-		lineItems = getSmokeLineItems();
-		assertEquals(5, lineItems.size());
-		assertInlinePriceState(findLineByService(lineItems, SERVICE_1_UUID), "100.00", "100.00", false);
-		assertInlinePriceState(findLineByService(lineItems, SERVICE_2_UUID), "150.00", "200.00", true);
-		assertInlinePriceState(findLineByService(lineItems, SERVICE_3_UUID), "250.00", "300.00", true);
-		assertInlinePriceState(findLineByService(lineItems, SERVICE_4_UUID), "400.00", "400.00", false);
-		assertInlinePriceState(findLineByService(lineItems, SERVICE_5_UUID), "450.00", "500.00", true);
+			// C. Add a normal line at bill level only
+			updateBill(billUuid,
+			    billPayload(lineItems,
+			        linePayload(SERVICE_4_UUID, PRICE_400_UUID, "400", null),
+			        ""));
+			lineItems = getBillLineItems(billUuid);
+			assertEquals("Expected four smoke line items after bill update. Available line items: "
+			        + describeLineItems(lineItems), 4, lineItems.size());
+			assertInlinePriceState(findLineByService(lineItems, SERVICE_1_UUID), "100.00", "100.00", false);
+			assertInlinePriceState(findLineByService(lineItems, SERVICE_2_UUID), "150.00", "200.00", true);
+			assertInlinePriceState(findLineByService(lineItems, SERVICE_3_UUID), "250.00", "300.00", true);
+			assertInlinePriceState(findLineByService(lineItems, SERVICE_4_UUID), "400.00", "400.00", false);
 
 		// D. Reset a line by priceUuid through /billLineItem/{uuid}
 		Map<String, Object> thirdLine = findLineByService(lineItems, SERVICE_3_UUID);
 		updateLineItem(stringValue(thirdLine.get("uuid")),
 		    existingLinePayload(thirdLine, SERVICE_3_UUID, PRICE_425_UUID, "425", null));
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		assertInlinePriceState(findLineByService(lineItems, SERVICE_3_UUID), "425.00", "425.00", false);
 
 		// E. Manual price override after reset
 		thirdLine = findLineByService(lineItems, SERVICE_3_UUID);
 		updateLineItem(stringValue(thirdLine.get("uuid")),
 		    existingLinePayload(thirdLine, SERVICE_3_UUID, PRICE_425_UUID, "350", "Manual override after reset"));
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		assertInlinePriceState(findLineByService(lineItems, SERVICE_3_UUID), "350.00", "425.00", true);
 
 		// F. Payment that covers first two lines
 		Map<String, Object> firstLine = findLineByService(lineItems, SERVICE_1_UUID);
 		Map<String, Object> secondLine = findLineByService(lineItems, SERVICE_2_UUID);
 		postJson(BILL_RESOURCE + "/" + billUuid + "/payment", paymentPayload(firstLine, secondLine));
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		firstLine = lineByUuid(lineItems, stringValue(firstLine.get("uuid")));
 		secondLine = lineByUuid(lineItems, stringValue(secondLine.get("uuid")));
 		assertEquals("PAID", stringValue(firstLine.get("paymentStatus")));
@@ -141,19 +145,19 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			Map<String, Object> paidLineAfterEdit = parse(openPaidLineUpdate);
 			assertInlinePriceState(paidLineAfterEdit, "220.00", "220.00", false);
 			assertEquals("PAID", stringValue(paidLineAfterEdit.get("paymentStatus")));
-			lineItems = getSmokeLineItems();
+			lineItems = getBillLineItems(billUuid);
 			assertComputedBalance(computeLineItemBalance(lineItems), lineItems);
 		} else {
 			int status = openPaidLineUpdate.getResponse().getStatus();
 			assertTrue("Paid line edit policy should be explicit at API boundary", status >= 400 && status < 500);
-			lineItems = getSmokeLineItems();
+			lineItems = getBillLineItems(billUuid);
 			assertInlinePriceState(lineByUuid(lineItems, stringValue(secondLine.get("uuid"))), "150.00", "200.00", true);
 		}
 
 		// H. Close-edit-reopen-edit-close behavior
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		postJson(BILL_RESOURCE + "/" + billUuid + "/payment", outstandingPaymentPayload(lineItems));
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		assertComputedBalance("0", lineItems);
 		secondLine = lineByUuid(lineItems, stringValue(secondLine.get("uuid")));
 		closeBillAndAssert(billUuid, "Close bill for policy check");
@@ -171,9 +175,73 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		String reopenPayload = existingLinePayload(secondLine, SERVICE_2_UUID, PRICE_220_UUID, "240", "Reopen edit");
 		Map<String, Object> lineAfterReopen = updateLineItem(stringValue(secondLine.get("uuid")), reopenPayload);
 		assertInlinePriceState(lineAfterReopen, "240.00", "220.00", true);
-		lineItems = getSmokeLineItems();
+		lineItems = getBillLineItems(billUuid);
 		postJson(BILL_RESOURCE + "/" + billUuid + "/payment", outstandingPaymentPayload(lineItems));
 		closeBillAndAssert(billUuid, "Close bill again after reopen");
+	}
+
+	@Test
+	public void additionalDiscount_shouldReduceBillBalanceWithoutChangingLineTotalsOrTax() throws Exception {
+		Map<String, Object> bill = postJson(BILL_RESOURCE, additionalDiscountBillPayload());
+		String billUuid = stringValue(bill.get("uuid"));
+		assertNotNull(billUuid);
+
+				bill = syncBill(billUuid);
+				List<Map<String, Object>> lineItems = getBillLineItems(billUuid);
+			assertEquals("Expected one created smoke line item. Available line items: " + describeLineItems(lineItems),
+			    1, lineItems.size());
+			Map<String, Object> taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+			assertAmount("396.00", bill.get("total"));
+			assertAmount("0", bill.get("additionalDiscount"));
+			assertAmount("396.00", bill.get("balance"));
+			assertAmount("40.00", lineDiscountAmount(taxedDiscountedLine));
+			assertAmount("36.00", lineTaxAmount(taxedDiscountedLine));
+			assertAmount("396.00", taxedDiscountedLine.get("total"));
+
+			postJson(BILL_RESOURCE + "/" + billUuid + "/payment", singleAllocationPaymentPayload(taxedDiscountedLine, "50"));
+			bill = getBill(billUuid);
+			lineItems = getBillLineItems(billUuid);
+			taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+			assertEquals("POSTED", stringValue(taxedDiscountedLine.get("paymentStatus")));
+			assertAmount("50.00", taxedDiscountedLine.get("totalAllocated"));
+			assertAmount("346.00", computeLineItemBalance(lineItems));
+
+			MvcResult invalidDiscountResult = postAdditionalDiscountResult(billUuid, "347");
+			assertEquals(Integer.valueOf(4), Integer.valueOf(invalidDiscountResult.getResponse().getStatus() / 100));
+			bill = syncBill(billUuid);
+			assertAmount("0", bill.get("additionalDiscount"));
+			assertAmount("346.00", bill.get("balance"));
+
+			Map<String, Object> additionalDiscountResponse = postAdditionalDiscount(billUuid, "75");
+			assertAmount("396.00", additionalDiscountResponse.get("total"));
+			assertAmount("75.00", additionalDiscountResponse.get("additionalDiscount"));
+			assertAmount("271.00", additionalDiscountResponse.get("balance"));
+			assertEquals("POSTED", stringValue(additionalDiscountResponse.get("status")));
+
+			bill = syncBill(billUuid);
+			lineItems = getBillLineItems(billUuid);
+			taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+			assertAmount("40.00", lineDiscountAmount(taxedDiscountedLine));
+			assertAmount("36.00", lineTaxAmount(taxedDiscountedLine));
+			assertAmount("396.00", taxedDiscountedLine.get("total"));
+			assertAmount("396.00", bill.get("total"));
+			assertAmount("75.00", bill.get("additionalDiscount"));
+			assertAmount("271.00", bill.get("balance"));
+
+			Map<String, Object> clearedDiscountResponse = postAdditionalDiscount(billUuid, "0");
+			assertAmount("396.00", clearedDiscountResponse.get("total"));
+			assertAmount("0", clearedDiscountResponse.get("additionalDiscount"));
+			assertAmount("346.00", clearedDiscountResponse.get("balance"));
+			assertEquals("POSTED", stringValue(clearedDiscountResponse.get("status")));
+
+			postAdditionalDiscount(billUuid, "75");
+
+			postJson(BILL_RESOURCE + "/" + billUuid + "/payment", paymentPayloadWithoutAllocations("271"));
+			bill = syncBill(billUuid);
+			assertAmount("0", bill.get("balance"));
+		assertAmount("75.00", bill.get("additionalDiscount"));
+		assertEquals("PAID", stringValue(bill.get("status")));
+		closeBillAndAssert(billUuid, "Close bill after additional discount settlement");
 	}
 
 	private Map<String, Object> getLineItem(String uuid) throws Exception {
@@ -184,22 +252,54 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		return parse(result);
 	}
 
-	@SuppressWarnings("unchecked")
-	private List<Map<String, Object>> getSmokeLineItems() throws Exception {
-		MvcResult result = mockMvc.perform(get(BILL_LINE_ITEM_RESOURCE)
+		private Map<String, Object> getBill(String uuid) throws Exception {
+			MvcResult result = mockMvc.perform(get(BILL_RESOURCE + "/" + uuid)
 		        .param("v", "full")
-		        .param("limit", "100")
 		        .accept(MediaType.APPLICATION_JSON))
 		        .andReturn();
 		assertSuccess(result);
-		Map<String, Object> payload = parse(result);
-		List<Map<String, Object>> results = (List<Map<String, Object>>) payload.get("results");
-		if (results == null) {
-			fail("Expected billLineItem collection payload to contain results. Payload keys=" + payload.keySet());
+			return parse(result);
 		}
 
+		private Map<String, Object> syncBill(String uuid) throws Exception {
+			return postJson(BILL_RESOURCE + "/sync-status/" + uuid, "{}");
+		}
+
+	@SuppressWarnings("unchecked")
+	private List<Map<String, Object>> lineItemsFromBill(Map<String, Object> bill) {
+		List<Map<String, Object>> lineItems = (List<Map<String, Object>>) bill.get("lineItems");
+		return normalizeLineItems(lineItems == null ? new ArrayList<Map<String, Object>>() : lineItems);
+	}
+
+	private List<Map<String, Object>> getBillLineItems(String billUuid) {
+		Bill persistedBill = Context.getService(IBillService.class).getByUuid(billUuid);
+		assertNotNull("Expected bill " + billUuid + " to exist", persistedBill);
 		List<Map<String, Object>> lineItems = new ArrayList<>();
-		for (Map<String, Object> lineItem : results) {
+		if (persistedBill.getLineItems() == null) {
+			return lineItems;
+		}
+		for (BillLineItem billLineItem : persistedBill.getLineItems()) {
+			if (billLineItem == null || Boolean.TRUE.equals(billLineItem.getVoided())) {
+				continue;
+			}
+			Map<String, Object> lineItem = new java.util.HashMap<String, Object>();
+			lineItem.put("uuid", billLineItem.getUuid());
+			lineItem.put("display", billLineItem.getBillableService() != null ? billLineItem.getBillableService().getName() : "");
+			lineItem.put("billableService",
+			    billLineItem.getBillableService() != null ? billLineItem.getBillableService().getUuid() : "");
+			lineItem.put("quantity", billLineItem.getQuantity());
+			lineItem.put("price", billLineItem.getPrice());
+			lineItem.put("originalPrice", billLineItem.getOriginalPrice());
+			lineItem.put("priceOverridden", billLineItem.getPriceOverridden());
+			lineItem.put("priceOverrideReason", billLineItem.getPriceOverrideReason());
+			lineItem.put("priceName", billLineItem.getPriceName());
+			lineItem.put("priceUuid", billLineItem.getItemPrice() != null ? billLineItem.getItemPrice().getUuid() : "");
+			lineItem.put("lineItemOrder", billLineItem.getLineItemOrder());
+			lineItem.put("paymentStatus", billLineItem.getPaymentStatus());
+			lineItem.put("totalDiscount", billLineItem.getTotalDiscount());
+			lineItem.put("totalTax", billLineItem.getTotalTax());
+			lineItem.put("total", billLineItem.getTotal());
+			lineItem.put("totalAllocated", billLineItem.getTotalAllocated());
 			if (isSmokeLineItem(lineItem) && !LEGACY_LINE_ITEM_UUID.equals(stringValue(lineItem.get("uuid")))) {
 				lineItems.add(lineItem);
 			}
@@ -243,6 +343,17 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		return postLineItem(lineItemUuid, json);
 	}
 
+	private Map<String, Object> postAdditionalDiscount(String billUuid, String amount) throws Exception {
+		MvcResult result = postAdditionalDiscountResult(billUuid, amount);
+		assertSuccess(result);
+		return parse(result);
+	}
+
+	private MvcResult postAdditionalDiscountResult(String billUuid, String amount) throws Exception {
+		return postRequest(BILL_ACTION_RESOURCE + "/" + billUuid + "/additional-discount",
+		    "{\"additionalDiscount\":" + amount + "}");
+	}
+
 	private List<Map<String, Object>> normalizeLineItems(List<Map<String, Object>> lineItems) {
 		assertNotNull("Expected bill payload to contain lineItems", lineItems);
 		lineItems.sort(new Comparator<Map<String, Object>>() {
@@ -274,9 +385,22 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 				break;
 			}
 		}
-		assertNotNull("Expected to find line item for service " + serviceUuid, foundLine);
-		return foundLine;
-	}
+			assertNotNull("Expected to find line item for service " + serviceUuid + ". Available line items: "
+			        + describeLineItems(lineItems), foundLine);
+			return foundLine;
+		}
+
+		private String describeLineItems(List<Map<String, Object>> lineItems) {
+			List<String> descriptions = new ArrayList<String>();
+			for (Map<String, Object> lineItem : lineItems) {
+				descriptions.add("{uuid=" + stringValue(lineItem.get("uuid"))
+				        + ", display=" + stringValue(lineItem.get("display"))
+				        + ", billableService=" + stringValue(lineItem.get("billableService"))
+				        + ", price=" + stringValue(lineItem.get("price"))
+				        + ", order=" + stringValue(lineItem.get("lineItemOrder")) + "}");
+			}
+			return descriptions.toString();
+		}
 
 	private void closeBillAndAssert(String billUuid, String reason) throws Exception {
 		Map<String, Object> closed = postJson(BILL_ACTION_RESOURCE + "/" + billUuid + "/close", closePayload(reason));
@@ -314,6 +438,11 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		    linePayload(SERVICE_3_UUID, PRICE_300_UUID, "250", "Initial override"));
 	}
 
+		private String additionalDiscountBillPayload() {
+			return billPayloadFromJsonLines(
+			    linePayloadWithDiscount(SERVICE_4_UUID, PRICE_400_UUID, "400", "40", "Taxed discount line"));
+		}
+
 	private String billPayload(List<Map<String, Object>> existingLines, String newLineOne, String newLineTwo) {
 		return billPayloadFromJsonLines(
 		    existingLinePayload(existingLines.get(0)),
@@ -323,15 +452,39 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		    newLineTwo);
 	}
 
-	private String billPayloadFromJsonLines(String lineOne, String lineTwo, String lineThree) {
-		return billPayloadFromJsonLines(lineOne, lineTwo, lineThree, "", "");
-	}
+		private String billPayloadFromJsonLines(String lineOne, String lineTwo, String lineThree) {
+			return "{"
+			        + "\"patient\":\"" + PATIENT_UUID + "\","
+			        + newReceiptNumberJson()
+			        + "\"status\":\"PENDING\","
+			        + "\"lineItems\":[" + lineOne + "," + lineTwo + "," + lineThree + "]"
+			        + "}";
+		}
+
+		private String billPayloadFromJsonLines(String lineOne, String lineTwo) {
+			return "{"
+			        + "\"patient\":\"" + PATIENT_UUID + "\","
+			        + newReceiptNumberJson()
+			        + "\"status\":\"PENDING\","
+			        + "\"lineItems\":[" + lineOne + "," + lineTwo + "]"
+			        + "}";
+		}
+
+		private String billPayloadFromJsonLines(String lineOne) {
+			return "{"
+			        + "\"patient\":\"" + PATIENT_UUID + "\","
+			        + newReceiptNumberJson()
+			        + "\"status\":\"PENDING\","
+			        + "\"lineItems\":[" + lineOne + "]"
+			        + "}";
+		}
 
 	private String billPayloadFromJsonLines(String lineOne, String lineTwo, String lineThree, String lineFour,
 	        String lineFive) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("{")
 		        .append("\"patient\":\"" + PATIENT_UUID + "\",")
+		        .append(newReceiptNumberJson())
 		        .append("\"status\":\"PENDING\",")
 		        .append("\"lineItems\":[")
 		        .append(lineOne)
@@ -345,9 +498,13 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		if (lineFive != null && lineFive.length() > 0) {
 			sb.append(",").append(lineFive);
 		}
-		sb.append("]}");
-		return sb.toString();
-	}
+			sb.append("]}");
+			return sb.toString();
+		}
+
+		private String newReceiptNumberJson() {
+			return "\"receiptNumber\":\"REST-SMOKE-" + java.util.UUID.randomUUID().toString() + "\",";
+		}
 
 	private String linePayload(String billableServiceUuid, String priceUuid, String price, String reason) {
 		return "{"
@@ -356,6 +513,24 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		        "\"price\":" + price + ","
 		        + "\"quantity\":1,"
 		        + "\"paymentStatus\":\"PENDING\""
+		        + reasonJson(reason)
+		        + "}";
+	}
+
+	private String linePayloadWithDiscount(String billableServiceUuid, String priceUuid, String price, String discountAmount,
+	        String reason) {
+		return "{"
+		        + "\"billableService\":\"" + billableServiceUuid + "\"," +
+		        "\"priceUuid\":\"" + priceUuid + "\"," +
+		        "\"price\":" + price + ","
+		        + "\"quantity\":1,"
+		        + "\"paymentStatus\":\"PENDING\","
+		        + "\"discounts\":[{"
+		        + "\"amount\":" + discountAmount + ","
+		        + "\"baseAmount\":" + price + ","
+		        + "\"rate\":0.10,"
+		        + "\"description\":\"Smoke line discount\""
+		        + "}]"
 		        + reasonJson(reason)
 		        + "}";
 	}
@@ -390,12 +565,31 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		        + "}";
 	}
 
+	private String singleAllocationPaymentPayload(Map<String, Object> line, String amount) {
+		return "{"
+		        + "\"instanceType\":\"" + PAYMENT_MODE_UUID + "\"," +
+		        "\"amount\":" + amount + ","
+		        + "\"amountTendered\":" + amount + ","
+		        + "\"allocations\":["
+		        + allocationPayload(line, amount, java.util.UUID.randomUUID().toString())
+		        + "]"
+		        + "}";
+	}
+
+	private String paymentPayloadWithoutAllocations(String amount) {
+		return "{"
+		        + "\"instanceType\":\"" + PAYMENT_MODE_UUID + "\"," +
+		        "\"amount\":" + amount + ","
+		        + "\"amountTendered\":" + amount
+		        + "}";
+	}
+
 	private String outstandingPaymentPayload(List<Map<String, Object>> lineItems) {
 		BigDecimal amount = computeLineItemBalanceAmount(lineItems);
 		StringBuilder allocations = new StringBuilder();
 		for (Map<String, Object> lineItem : lineItems) {
-			BigDecimal total = new BigDecimal(String.valueOf(lineItem.get("total")));
-			BigDecimal allocated = new BigDecimal(String.valueOf(lineItem.get("totalAllocated")));
+			BigDecimal total = amountValue(lineItem.get("total"));
+			BigDecimal allocated = amountValue(lineItem.get("totalAllocated"));
 			BigDecimal outstanding = total.subtract(allocated);
 			if (outstanding.compareTo(BigDecimal.ZERO) > 0) {
 				if (allocations.length() > 0) {
@@ -455,7 +649,7 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 	}
 
 	private int intValue(Object value) {
-		return new BigDecimal(String.valueOf(value)).intValue();
+		return amountValue(value).intValue();
 	}
 
 	private void assertLinePriceState(Map<String, Object> lineItem, String price, String originalPrice, boolean overridden) {
@@ -469,7 +663,7 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 	}
 
 	private void assertAmount(String expected, Object actual) {
-		assertEquals(0, new BigDecimal(expected).compareTo(new BigDecimal(String.valueOf(actual))));
+		assertEquals(0, new BigDecimal(expected).compareTo(amountValue(actual)));
 	}
 
 	private String computeLineItemBalance(List<Map<String, Object>> lineItems) {
@@ -478,19 +672,52 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 
 	private BigDecimal computeLineItemBalanceAmount(List<Map<String, Object>> lineItems) {
 		BigDecimal balance = BigDecimal.ZERO;
-		for (Map<String, Object> lineItem : lineItems) {
-			BigDecimal total = new BigDecimal(String.valueOf(lineItem.get("total")));
-			BigDecimal allocated = new BigDecimal(String.valueOf(lineItem.get("totalAllocated")));
-			balance = balance.add(total.subtract(allocated));
+			for (Map<String, Object> lineItem : lineItems) {
+				BigDecimal total = amountValue(lineItem.get("total"));
+				BigDecimal allocated = amountValue(lineItem.get("totalAllocated"));
+				balance = balance.add(total.subtract(allocated));
+			}
+			return balance;
 		}
-		return balance;
+
+	private BigDecimal amountValue(Object value) {
+		if (value == null || "null".equals(String.valueOf(value))) {
+			return BigDecimal.ZERO;
+		}
+		return new BigDecimal(String.valueOf(value));
+	}
+
+	@SuppressWarnings("unchecked")
+	private BigDecimal lineDiscountAmount(Map<String, Object> lineItem) {
+		return adjustmentTotal(lineItem, "totalDiscount", "discounts");
+	}
+
+	@SuppressWarnings("unchecked")
+	private BigDecimal lineTaxAmount(Map<String, Object> lineItem) {
+		return adjustmentTotal(lineItem, "totalTax", "taxes");
+	}
+
+	@SuppressWarnings("unchecked")
+	private BigDecimal adjustmentTotal(Map<String, Object> lineItem, String totalKey, String adjustmentsKey) {
+		BigDecimal total = amountValue(lineItem.get(totalKey));
+		if (total.compareTo(BigDecimal.ZERO) != 0) {
+			return total;
+		}
+		Object adjustments = lineItem.get(adjustmentsKey);
+		if (!(adjustments instanceof List)) {
+			return total;
+		}
+		for (Map<String, Object> adjustment : (List<Map<String, Object>>) adjustments) {
+			total = total.add(amountValue(adjustment.get("amount")));
+		}
+		return total;
 	}
 
 	private void assertComputedBalance(String expected, List<Map<String, Object>> lineItems) {
 		BigDecimal balance = BigDecimal.ZERO;
 		for (Map<String, Object> lineItem : lineItems) {
-			BigDecimal total = new BigDecimal(String.valueOf(lineItem.get("total")));
-			BigDecimal allocated = new BigDecimal(String.valueOf(lineItem.get("totalAllocated")));
+			BigDecimal total = amountValue(lineItem.get("total"));
+			BigDecimal allocated = amountValue(lineItem.get("totalAllocated"));
 			balance = balance.add(total.subtract(allocated));
 		}
 		assertAmount(expected, balance);

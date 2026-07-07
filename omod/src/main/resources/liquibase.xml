@@ -1589,4 +1589,16 @@
 		</createIndex>
 	</changeSet>
 
+	<changeSet id="kenyaemr.cashier-001-v4.2.6-additional-discount-01" author="codex">
+		<preConditions onFail="MARK_RAN">
+			<not>
+				<columnExists tableName="cashier_bill" columnName="additional_discount" />
+			</not>
+		</preConditions>
+		<comment>Add bill-level additional discount amount</comment>
+		<addColumn tableName="cashier_bill">
+			<column name="additional_discount" type="decimal(10,2)" defaultValueNumeric="0.00" />
+		</addColumn>
+	</changeSet>
+
 </databaseChangeLog>

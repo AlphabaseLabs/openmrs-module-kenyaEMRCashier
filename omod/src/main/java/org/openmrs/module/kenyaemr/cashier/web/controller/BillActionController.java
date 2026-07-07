@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,10 +32,11 @@ import java.util.Map;
  * This controller provides action endpoints for bill operations.
  * 
  * Endpoints:
- * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/close
- * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/reopen
- * - POST /rest/v1/cashier/bill/sync-status/{billUuid}
- */
+     * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/close
+     * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/reopen
+     * - POST /rest/v1/kenyaemr-cashier/bill/{billUuid}/additional-discount
+     * - POST /rest/v1/cashier/bill/sync-status/{billUuid}
+     */
 @Controller
 @RequestMapping(value = "/rest/" + RestConstants.VERSION_1)
 public class BillActionController extends BaseRestController {
@@ -119,10 +121,50 @@ public class BillActionController extends BaseRestController {
             error.put("error", "An error occurred while reopening the bill: " + e.getMessage());
             return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
         }
+	    }
+
+    @RequestMapping(value = "/kenyaemr-cashier/bill/{billUuid}/additional-discount", method = RequestMethod.POST)
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> updateAdditionalDiscount(
+            @PathVariable("billUuid") String billUuid,
+            @RequestBody Map<String, Object> requestBody) {
+
+        try {
+            IBillService service = Context.getService(IBillService.class);
+            Bill bill = service.getByUuid(billUuid);
+
+            if (bill == null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Bill not found with UUID: " + billUuid);
+                return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+            }
+
+            if (Boolean.TRUE.equals(bill.isClosed())) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Additional discount cannot be updated on a closed bill.");
+                return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+            }
+
+            BigDecimal additionalDiscount = parseAdditionalDiscount(requestBody.get("additionalDiscount"));
+            bill.updateAdditionalDiscount(additionalDiscount);
+            Bill updatedBill = service.save(bill);
+
+            return new ResponseEntity<>(buildBillResponse(updatedBill, "Additional discount updated successfully"),
+                    HttpStatus.OK);
+
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "An error occurred while updating additional discount: " + e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
-    /**
-     * Alias endpoint for bill status synchronization. The documented REST resource path is
+	    /**
+	     * Alias endpoint for bill status synchronization. The documented REST resource path is
      * POST /rest/v1/cashier/bill/{billUuid}/sync-status, but this alias is kept for callers
      * using the explicit action-style URL.
      *
@@ -160,9 +202,22 @@ public class BillActionController extends BaseRestController {
         response.put("closed", bill.isClosed());
         response.put("closeReason", bill.getCloseReason());
         response.put("closedBy", bill.getClosedBy() != null ? bill.getClosedBy().getUuid() : null);
-        response.put("dateClosed", bill.getDateClosed());
-        response.put("balance", bill.getBalance());
-        response.put("message", message);
-        return response;
+	        response.put("dateClosed", bill.getDateClosed());
+	        response.put("total", bill.getTotal());
+	        response.put("additionalDiscount", bill.getAdditionalDiscount());
+	        response.put("balance", bill.getBalance());
+	        response.put("message", message);
+	        return response;
+	    }
+
+    private BigDecimal parseAdditionalDiscount(Object value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Additional discount is required.");
+        }
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Additional discount must be a valid decimal amount.");
+        }
     }
-}
+	}
