@@ -117,11 +117,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
-				description.addProperty("closedBy");
-				description.addProperty("dateClosed");
-				description.addProperty("additionalDiscount");
-				// Add calculated properties for cumulative totals
-				description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.DEFAULT);
+			description.addProperty("closedBy");
+			description.addProperty("dateClosed");
+			// Add calculated properties for cumulative totals
+			description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.DEFAULT);
 			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"),
 					Representation.DEFAULT);
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.DEFAULT);
@@ -148,11 +147,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
-				description.addProperty("closedBy");
-				description.addProperty("dateClosed");
-				description.addProperty("additionalDiscount");
-				// Add calculated properties for cumulative totals
-				description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.FULL);
+			description.addProperty("closedBy");
+			description.addProperty("dateClosed");
+			// Add calculated properties for cumulative totals
+			description.addProperty("totalPayments", findMethod("getTotalPayments"), Representation.FULL);
 			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"), Representation.FULL);
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"), Representation.FULL);
 			description.addProperty("totalExempted", findMethod("getTotalExempted"), Representation.FULL);
@@ -179,11 +177,10 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
-				description.addProperty("closedBy");
-				description.addProperty("dateClosed");
-				description.addProperty("additionalDiscount");
-				// Add calculated properties for cumulative totals
-				description.addProperty("totalPayments", findMethod("getTotalPayments"));
+			description.addProperty("closedBy");
+			description.addProperty("dateClosed");
+			// Add calculated properties for cumulative totals
+			description.addProperty("totalPayments", findMethod("getTotalPayments"));
 			description.addProperty("totalActualPayments", findMethod("getTotalActualPayments"));
 			description.addProperty("totalWaivers", findMethod("getTotalWaivers"));
 			description.addProperty("totalExempted", findMethod("getTotalExempted"));
@@ -537,12 +534,6 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		}
 	}
 
-	@PropertySetter("additionalDiscount")
-	public void setAdditionalDiscount(Bill instance, Object additionalDiscount) {
-		// Legacy compatibility field. Discounts are sourced from line-item adjustments only.
-		instance.setAdditionalDiscount(BigDecimal.ZERO);
-	}
-
 	@PropertyGetter("lineItems")
 	public List<BillLineItem> getLineItems(Bill instance) {
 		if (instance.getLineItems() == null) {
@@ -832,22 +823,6 @@ public class BillResource extends BaseRestDataResource<Bill> {
 	@PropertyGetter("balance")
 	public BigDecimal getBalance(Bill instance) {
 		return instance.getBalance();
-	}
-
-	@PropertyGetter("additionalDiscount")
-	public BigDecimal getAdditionalDiscount(Bill instance) {
-		return instance.getAdditionalDiscount();
-	}
-
-	private BigDecimal parseBigDecimal(Object value, String fieldName) {
-		if (value == null) {
-			return BigDecimal.ZERO;
-		}
-		try {
-			return new BigDecimal(String.valueOf(value));
-		} catch (NumberFormatException e) {
-			throw new IllegalArgumentException("Invalid decimal value for " + fieldName, e);
-		}
 	}
 
 }

@@ -91,7 +91,6 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 		object.synchronizePaymentStatus();
 		if (object.getBill() != null) {
 			object.getBill().synchronizeBillStatus();
-			object.getBill().setAdditionalDiscount(BigDecimal.ZERO);
 		}
 	}
 

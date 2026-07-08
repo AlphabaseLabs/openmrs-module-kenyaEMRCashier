@@ -202,61 +202,6 @@ public class Bill extends BaseOpenmrsData {
 		return total.min(totalPayments);
 	}
 
-	public BigDecimal getAdditionalDiscount() {
-		return BigDecimal.ZERO;
-	}
-
-	public void setAdditionalDiscount(BigDecimal additionalDiscount) {
-		// Legacy mapped property. Discounts are sourced from line-item adjustments only.
-	}
-
-	public BigDecimal getDiscountedTotal() {
-		return getTotal();
-	}
-
-	public BigDecimal getAdditionalDiscountEligibleAmount() {
-		BigDecimal total = BigDecimal.ZERO;
-		if (lineItems == null) {
-			return total;
-		}
-
-		for (BillLineItem line : lineItems) {
-			if (!isAdditionalDiscountEligible(line)) {
-				continue;
-			}
-			total = total.add(line.getRemainingAmount());
-		}
-
-		return total;
-	}
-
-	public void validateAdditionalDiscountAmount(BigDecimal amount) {
-		BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
-		if (normalizedAmount.compareTo(BigDecimal.ZERO) < 0) {
-			throw new IllegalArgumentException("Additional discount cannot be negative.");
-		}
-
-		BigDecimal eligibleAmount = getAdditionalDiscountEligibleAmount();
-		if (normalizedAmount.compareTo(eligibleAmount) > 0) {
-			throw new IllegalArgumentException("Additional discount cannot exceed eligible unpaid line item amount.");
-		}
-	}
-
-	public void updateAdditionalDiscount(BigDecimal amount) {
-		BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
-		validateAdditionalDiscountAmount(normalizedAmount);
-		setAdditionalDiscount(BigDecimal.ZERO);
-		synchronizeBillStatus();
-	}
-
-	private boolean isAdditionalDiscountEligible(BillLineItem line) {
-		if (line == null || Boolean.TRUE.equals(line.getVoided())) {
-			return false;
-		}
-
-		return line.getPaymentStatus() == BillStatus.PENDING || line.getPaymentStatus() == BillStatus.POSTED;
-	}
-
 	/**
 	 * Gets the total amount of deposits applied to this bill.
 	 * @return The total deposits amount

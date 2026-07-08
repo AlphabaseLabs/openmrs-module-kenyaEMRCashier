@@ -1627,36 +1627,4 @@
 		</sql>
 	</changeSet>
 
-	<changeSet id="kenyaemr.cashier-001-v4.2.6-additional-discount-01" author="codex">
-		<preConditions onFail="MARK_RAN">
-			<sqlCheck expectedResult="0">
-				SELECT COUNT(*) FROM information_schema.columns
-				WHERE UPPER(table_schema) = UPPER(SCHEMA())
-				AND UPPER(table_name) = UPPER('cashier_bill')
-				AND UPPER(column_name) = UPPER('additional_discount')
-			</sqlCheck>
-		</preConditions>
-		<comment>Add bill-level additional discount amount</comment>
-		<addColumn tableName="cashier_bill">
-			<column name="additional_discount" type="decimal(10,2)" defaultValueNumeric="0.00" />
-		</addColumn>
-	</changeSet>
-
-	<changeSet id="kenyaemr.cashier-001-v4.2.6-additional-discount-02" author="codex">
-		<preConditions onFail="MARK_RAN">
-			<sqlCheck expectedResult="1">
-				SELECT COUNT(*) FROM information_schema.columns
-				WHERE UPPER(table_schema) = UPPER(SCHEMA())
-				AND UPPER(table_name) = UPPER('cashier_bill')
-				AND UPPER(column_name) = UPPER('additional_discount')
-			</sqlCheck>
-		</preConditions>
-		<comment>Ensure legacy bills default additional discount to zero</comment>
-		<sql>
-			UPDATE cashier_bill
-			SET additional_discount = 0.00
-			WHERE additional_discount IS NULL
-		</sql>
-	</changeSet>
-
 </databaseChangeLog>

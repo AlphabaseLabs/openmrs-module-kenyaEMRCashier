@@ -9,7 +9,6 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.FileSystemResourceAccessor;
 import org.junit.Test;
 
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,9 +36,7 @@ public class CashierLegacyBillingMigrationTest {
 	    "kenyaemr.cashier-001-v4.2.6-inline-price-editing-03",
 	    "kenyaemr.cashier-001-v4.2.6-inline-price-editing-04",
 	    "kenyaemr.cashier-001-v4.2.6-inline-price-editing-05",
-	    "kenyaemr.cashier-001-v4.2.6-inline-price-editing-06",
-	    "kenyaemr.cashier-001-v4.2.6-additional-discount-01",
-	    "kenyaemr.cashier-001-v4.2.6-additional-discount-02");
+	    "kenyaemr.cashier-001-v4.2.6-inline-price-editing-06");
 	
 	@Test
 	public void liquibaseMigration_shouldUpgradeLegacyBillingSchema() throws Exception {
@@ -50,7 +47,6 @@ public class CashierLegacyBillingMigrationTest {
 			int lineItemCount = countRows(connection, "cashier_bill_line_item");
 			int paymentCount = countRows(connection, "cashier_bill_payment");
 			
-			assertFalse(columnExists(connection, "cashier_bill", "additional_discount"));
 			assertFalse(columnExists(connection, "cashier_bill_line_item", "original_price"));
 			assertFalse(columnExists(connection, "cashier_bill_line_item", "price_overridden"));
 			assertFalse(columnExists(connection, "cashier_bill_line_item", "price_override_reason"));
@@ -64,8 +60,6 @@ public class CashierLegacyBillingMigrationTest {
 				assertTrue(id + " should execute against the legacy schema", changeSetRan(connection, id));
 			}
 			
-			assertColumnSelectable(connection, "cashier_bill", "additional_discount",
-			    describeColumns(connection, "cashier_bill") + "; " + describeTargetChangesets(connection));
 			assertColumnSelectable(connection, "cashier_bill_line_item", "original_price");
 			assertColumnSelectable(connection, "cashier_bill_line_item", "price_overridden");
 			assertColumnSelectable(connection, "cashier_bill_line_item", "price_override_reason");
@@ -73,7 +67,6 @@ public class CashierLegacyBillingMigrationTest {
 			assertEquals(billCount, countRows(connection, "cashier_bill"));
 			assertEquals(lineItemCount, countRows(connection, "cashier_bill_line_item"));
 			assertEquals(paymentCount, countRows(connection, "cashier_bill_payment"));
-			assertAdditionalDiscountDefaults(connection);
 			assertLineItemOverrideDefaults(connection);
 		}
 	}
@@ -168,33 +161,6 @@ public class CashierLegacyBillingMigrationTest {
 		}
 	}
 	
-	private String describeColumns(Connection connection, String tableName) throws SQLException {
-		StringBuilder description = new StringBuilder(tableName).append(" columns:");
-		try (PreparedStatement statement = connection.prepareStatement("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-		        + "WHERE UPPER(TABLE_NAME) = UPPER(?) ORDER BY ORDINAL_POSITION")) {
-			statement.setString(1, tableName);
-			try (ResultSet columns = statement.executeQuery()) {
-				while (columns.next()) {
-					description.append(' ').append(columns.getString(1));
-				}
-			}
-		}
-		return description.toString();
-	}
-	
-	private String describeTargetChangesets(Connection connection) throws SQLException {
-		StringBuilder description = new StringBuilder("target changesets:");
-		try (PreparedStatement statement = connection.prepareStatement(
-		    "SELECT ID, EXECTYPE FROM DATABASECHANGELOG WHERE ID LIKE 'kenyaemr.cashier-001-v4.2.6-%' ORDER BY ID")) {
-			try (ResultSet rows = statement.executeQuery()) {
-				while (rows.next()) {
-					description.append(' ').append(rows.getString(1)).append('=').append(rows.getString(2));
-				}
-			}
-		}
-		return description.toString();
-	}
-	
 	private Path writeTargetChangeLog() throws Exception {
 		String source = new String(Files.readAllBytes(Paths.get("target/classes", CHANGELOG)), StandardCharsets.UTF_8);
 		int firstChangeSet = source.indexOf("<changeSet");
@@ -216,15 +182,6 @@ public class CashierLegacyBillingMigrationTest {
 		        ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
 			rows.next();
 			return rows.getInt(1);
-		}
-	}
-	
-	private void assertAdditionalDiscountDefaults(Connection connection) throws SQLException {
-		try (Statement statement = connection.createStatement();
-		        ResultSet rows = statement.executeQuery("SELECT additional_discount FROM cashier_bill ORDER BY bill_id")) {
-			while (rows.next()) {
-				assertEquals(0, BigDecimal.ZERO.compareTo(rows.getBigDecimal("additional_discount")));
-			}
 		}
 	}
 	
