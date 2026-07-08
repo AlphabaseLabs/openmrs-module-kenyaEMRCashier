@@ -514,18 +514,6 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			return descriptions.toString();
 		}
 
-	@SuppressWarnings("unchecked")
-	private void assertActivePaymentCount(Map<String, Object> bill, int expectedCount) {
-		Object paymentsValue = bill.get("payments");
-		assertTrue("Expected bill representation to contain payments", paymentsValue instanceof List);
-		List<Map<String, Object>> payments = (List<Map<String, Object>>) paymentsValue;
-		assertEquals(Integer.valueOf(expectedCount), Integer.valueOf(payments.size()));
-		for (Map<String, Object> payment : payments) {
-			assertTrue("Expected fetched bill representation to exclude voided payments",
-			    !Boolean.TRUE.equals(payment.get("voided")));
-		}
-	}
-
 	private void closeBillAndAssert(String billUuid, String reason) throws Exception {
 		Map<String, Object> closed = postJson(BILL_ACTION_RESOURCE + "/" + billUuid + "/close", closePayload(reason));
 		assertEquals(Boolean.TRUE, closed.get("closed"));
@@ -592,15 +580,6 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			        + newReceiptNumberJson()
 			        + "\"status\":\"PENDING\","
 			        + "\"lineItems\":[" + lineOne + "," + lineTwo + "]"
-			        + "}";
-		}
-
-		private String billPayloadFromJsonLines(String lineOne) {
-			return "{"
-			        + "\"patient\":\"" + PATIENT_UUID + "\","
-			        + newReceiptNumberJson()
-			        + "\"status\":\"PENDING\","
-			        + "\"lineItems\":[" + lineOne + "]"
 			        + "}";
 		}
 
