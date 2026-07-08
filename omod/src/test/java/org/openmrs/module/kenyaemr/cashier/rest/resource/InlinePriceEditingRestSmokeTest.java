@@ -6,6 +6,9 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItemAdjustment;
+import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
+import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierResourceController;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierSubResourceController;
 import org.openmrs.module.kenyaemr.cashier.web.controller.BillActionController;
@@ -31,6 +34,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -144,7 +148,7 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		if (isSuccess(openPaidLineUpdate)) {
 			Map<String, Object> paidLineAfterEdit = parse(openPaidLineUpdate);
 			assertInlinePriceState(paidLineAfterEdit, "220.00", "220.00", false);
-			assertEquals("PAID", stringValue(paidLineAfterEdit.get("paymentStatus")));
+			assertEquals("POSTED", stringValue(paidLineAfterEdit.get("paymentStatus")));
 			lineItems = getBillLineItems(billUuid);
 			assertComputedBalance(computeLineItemBalance(lineItems), lineItems);
 		} else {
@@ -181,8 +185,8 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 	}
 
 	@Test
-	public void additionalDiscount_shouldReduceBillBalanceWithoutChangingLineTotalsOrTax() throws Exception {
-		Map<String, Object> bill = postJson(BILL_RESOURCE, additionalDiscountBillPayload());
+	public void additionalDiscount_shouldAllocateToLineDiscountsAndRecalculateTax() throws Exception {
+		Map<String, Object> bill = postJson(BILL_RESOURCE, taxedBillPayload());
 		String billUuid = stringValue(bill.get("uuid"));
 		assertNotNull(billUuid);
 
@@ -191,12 +195,12 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			assertEquals("Expected one created smoke line item. Available line items: " + describeLineItems(lineItems),
 			    1, lineItems.size());
 			Map<String, Object> taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
-			assertAmount("396.00", bill.get("total"));
+			assertAmount("440.00", bill.get("total"));
 			assertAmount("0", bill.get("additionalDiscount"));
-			assertAmount("396.00", bill.get("balance"));
-			assertAmount("40.00", lineDiscountAmount(taxedDiscountedLine));
-			assertAmount("36.00", lineTaxAmount(taxedDiscountedLine));
-			assertAmount("396.00", taxedDiscountedLine.get("total"));
+			assertAmount("440.00", bill.get("balance"));
+			assertAmount("0", lineDiscountAmount(taxedDiscountedLine));
+			assertAmount("40.00", lineTaxAmount(taxedDiscountedLine));
+			assertAmount("440.00", taxedDiscountedLine.get("total"));
 
 			postJson(BILL_RESOURCE + "/" + billUuid + "/payment", singleAllocationPaymentPayload(taxedDiscountedLine, "50"));
 			bill = getBill(billUuid);
@@ -204,44 +208,167 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
 			assertEquals("POSTED", stringValue(taxedDiscountedLine.get("paymentStatus")));
 			assertAmount("50.00", taxedDiscountedLine.get("totalAllocated"));
-			assertAmount("346.00", computeLineItemBalance(lineItems));
+			assertAmount("390.00", computeLineItemBalance(lineItems));
 
-			MvcResult invalidDiscountResult = postAdditionalDiscountResult(billUuid, "347");
+			MvcResult invalidDiscountResult = postAdditionalDiscountResult(billUuid, "391");
 			assertEquals(Integer.valueOf(4), Integer.valueOf(invalidDiscountResult.getResponse().getStatus() / 100));
 			bill = syncBill(billUuid);
 			assertAmount("0", bill.get("additionalDiscount"));
-			assertAmount("346.00", bill.get("balance"));
+			assertAmount("390.00", bill.get("balance"));
 
-			Map<String, Object> additionalDiscountResponse = postAdditionalDiscount(billUuid, "75");
-			assertAmount("396.00", additionalDiscountResponse.get("total"));
-			assertAmount("75.00", additionalDiscountResponse.get("additionalDiscount"));
-			assertAmount("271.00", additionalDiscountResponse.get("balance"));
+			String sponsorUuid = Context.getProviderService().getProvider(1).getUuid();
+			Map<String, Object> additionalDiscountResponse = postAdditionalDiscount(billUuid, "75", sponsorUuid,
+			    "Board approval");
+			assertAmount("357.50", additionalDiscountResponse.get("total"));
+			assertAmount("75.00", additionalDiscountResponse.get("totalDiscount"));
+			assertAmount("0", additionalDiscountResponse.get("additionalDiscount"));
+			assertAmount("307.50", additionalDiscountResponse.get("balance"));
 			assertEquals("POSTED", stringValue(additionalDiscountResponse.get("status")));
 
 			bill = syncBill(billUuid);
 			lineItems = getBillLineItems(billUuid);
 			taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
-			assertAmount("40.00", lineDiscountAmount(taxedDiscountedLine));
-			assertAmount("36.00", lineTaxAmount(taxedDiscountedLine));
-			assertAmount("396.00", taxedDiscountedLine.get("total"));
-			assertAmount("396.00", bill.get("total"));
-			assertAmount("75.00", bill.get("additionalDiscount"));
-			assertAmount("271.00", bill.get("balance"));
+			assertAmount("75.00", lineDiscountAmount(taxedDiscountedLine));
+			assertAmount("32.50", lineTaxAmount(taxedDiscountedLine));
+			assertAmount("357.50", taxedDiscountedLine.get("total"));
+			assertAmount("357.50", bill.get("total"));
+			assertAmount("75.00", bill.get("totalDiscount"));
+			assertAmount("0", bill.get("additionalDiscount"));
+			assertAmount("307.50", bill.get("balance"));
+			assertLineDiscountMetadata(taxedDiscountedLine, sponsorUuid, "Board approval");
 
-			Map<String, Object> clearedDiscountResponse = postAdditionalDiscount(billUuid, "0");
-			assertAmount("396.00", clearedDiscountResponse.get("total"));
-			assertAmount("0", clearedDiscountResponse.get("additionalDiscount"));
-			assertAmount("346.00", clearedDiscountResponse.get("balance"));
-			assertEquals("POSTED", stringValue(clearedDiscountResponse.get("status")));
+			Map<String, Object> replacedLine = updateLineItem(stringValue(taxedDiscountedLine.get("uuid")),
+			    existingLinePayloadWithDiscount(taxedDiscountedLine, SERVICE_4_UUID, PRICE_400_UUID, "400", "25",
+			        "Manual adjustment"));
+			lineItems = getBillLineItems(billUuid);
+			replacedLine = lineByUuid(lineItems, stringValue(replacedLine.get("uuid")));
+			assertAmount("25.00", lineDiscountAmount(replacedLine));
+			assertAmount("37.50", lineTaxAmount(replacedLine));
+			assertLineDiscountMetadata(replacedLine, null, "Manual adjustment");
 
-			postAdditionalDiscount(billUuid, "75");
-
-			postJson(BILL_RESOURCE + "/" + billUuid + "/payment", paymentPayloadWithoutAllocations("271"));
+			postJson(BILL_RESOURCE + "/" + billUuid + "/payment", paymentPayloadWithoutAllocations("362.50"));
 			bill = syncBill(billUuid);
 			assertAmount("0", bill.get("balance"));
-		assertAmount("75.00", bill.get("additionalDiscount"));
+		assertAmount("0", bill.get("additionalDiscount"));
 		assertEquals("PAID", stringValue(bill.get("status")));
 		closeBillAndAssert(billUuid, "Close bill after additional discount settlement");
+	}
+
+	@Test
+	public void additionalDiscount_shouldReplaceEligibleDiscountsAndClearAllDiscountsWhenZero() throws Exception {
+		Map<String, Object> bill = postJson(BILL_RESOURCE, taxedAndUntaxedBillPayload());
+		String billUuid = stringValue(bill.get("uuid"));
+		assertNotNull(billUuid);
+		List<Map<String, Object>> lineItems = getBillLineItems(billUuid);
+		Map<String, Object> taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		Map<String, Object> paidDiscountedLine = findLineByService(lineItems, SERVICE_5_UUID);
+
+		updateLineItem(stringValue(taxedDiscountedLine.get("uuid")),
+		    existingLinePayloadWithDiscount(taxedDiscountedLine, SERVICE_4_UUID, PRICE_400_UUID, "400", "40",
+		        "Manual discount"));
+		updateLineItem(stringValue(paidDiscountedLine.get("uuid")),
+		    existingLinePayloadWithDiscount(paidDiscountedLine, SERVICE_5_UUID, PRICE_500_UUID, "500", "20",
+		        "Ineligible discount"));
+		lineItems = getBillLineItems(billUuid);
+		taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		paidDiscountedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		postJson(BILL_RESOURCE + "/" + billUuid + "/payment",
+		    singleAllocationPaymentPayload(paidDiscountedLine, numberString(paidDiscountedLine.get("total"))));
+
+		lineItems = getBillLineItems(billUuid);
+		taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		paidDiscountedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		assertEquals("PENDING", stringValue(taxedDiscountedLine.get("paymentStatus")));
+		assertEquals("PAID", stringValue(paidDiscountedLine.get("paymentStatus")));
+		assertAmount("40.00", lineDiscountAmount(taxedDiscountedLine));
+		assertAmount("36.00", lineTaxAmount(taxedDiscountedLine));
+		assertAmount("20.00", lineDiscountAmount(paidDiscountedLine));
+
+		String sponsorUuid = Context.getProviderService().getProvider(1).getUuid();
+		Map<String, Object> result = postAdditionalDiscount(billUuid, "60", sponsorUuid, "Bulk replacement");
+		assertAmount("80.00", result.get("totalDiscount"));
+		assertAmount("0", result.get("additionalDiscount"));
+
+		bill = syncBill(billUuid);
+		lineItems = getBillLineItems(billUuid);
+		taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		paidDiscountedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		assertAmount("60.00", lineDiscountAmount(taxedDiscountedLine));
+		assertAmount("34.00", lineTaxAmount(taxedDiscountedLine));
+		assertLineDiscountMetadata(taxedDiscountedLine, sponsorUuid, "Bulk replacement");
+		assertAmount("20.00", lineDiscountAmount(paidDiscountedLine));
+		assertLineDiscountMetadata(paidDiscountedLine, null, "Ineligible discount");
+		assertAmount("80.00", bill.get("totalDiscount"));
+		assertAmount("0", bill.get("additionalDiscount"));
+
+		addVoidedDiscountAdjustment(billUuid, stringValue(paidDiscountedLine.get("uuid")), "Voided historical discount");
+		assertVoidedDiscountStillVoided(billUuid, stringValue(paidDiscountedLine.get("uuid")),
+		    "Voided historical discount");
+
+		postAdditionalDiscount(billUuid, "0", sponsorUuid, "Clear all discounts");
+		bill = syncBill(billUuid);
+		lineItems = getBillLineItems(billUuid);
+		taxedDiscountedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		paidDiscountedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		assertAmount("0", lineDiscountAmount(taxedDiscountedLine));
+		assertAmount("40.00", lineTaxAmount(taxedDiscountedLine));
+		assertAmount("0", lineDiscountAmount(paidDiscountedLine));
+		assertAmount("0", bill.get("totalDiscount"));
+		assertAmount("0", bill.get("additionalDiscount"));
+		assertAmount("940.00", bill.get("total"));
+		assertAmount("460.00", bill.get("balance"));
+		assertVoidedDiscountStillVoided(billUuid, stringValue(paidDiscountedLine.get("uuid")),
+		    "Voided historical discount");
+	}
+
+	@Test
+	public void deletePayment_shouldResynchronizeBillAndLineStatusesFromActiveAllocations() throws Exception {
+		Map<String, Object> bill = postJson(BILL_RESOURCE, taxedAndUntaxedBillPayload());
+		String billUuid = stringValue(bill.get("uuid"));
+		assertNotNull(billUuid);
+
+		List<Map<String, Object>> lineItems = getBillLineItems(billUuid);
+		Map<String, Object> taxedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		Map<String, Object> untaxedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		Map<String, Object> taxedPayment = postJson(BILL_RESOURCE + "/" + billUuid + "/payment",
+		    singleAllocationPaymentPayload(taxedLine, numberString(taxedLine.get("total"))));
+		Map<String, Object> untaxedPayment = postJson(BILL_RESOURCE + "/" + billUuid + "/payment",
+		    singleAllocationPaymentPayload(untaxedLine, numberString(untaxedLine.get("total"))));
+		String taxedPaymentUuid = stringValue(taxedPayment.get("uuid"));
+		String untaxedPaymentUuid = stringValue(untaxedPayment.get("uuid"));
+
+		bill = syncBill(billUuid);
+		assertEquals("PAID", stringValue(bill.get("status")));
+		assertPersistedBillState(billUuid, "PAID", "0", "940.00");
+		assertPersistedActivePaymentCount(billUuid, 2);
+
+		String partialDeleteReason = "Delete one payment for partial settlement";
+		deletePaymentAndAssert(billUuid, untaxedPaymentUuid, partialDeleteReason);
+		getBill(billUuid);
+		lineItems = getBillLineItems(billUuid);
+		taxedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		untaxedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		assertPersistedBillState(billUuid, "POSTED", "500.00", "440.00");
+		assertPersistedActivePaymentCount(billUuid, 1);
+		assertEquals("PAID", stringValue(taxedLine.get("paymentStatus")));
+		assertEquals("PENDING", stringValue(untaxedLine.get("paymentStatus")));
+		assertAmount("440.00", taxedLine.get("totalAllocated"));
+		assertAmount("0", untaxedLine.get("totalAllocated"));
+		assertPaymentAndAllocationsVoided(billUuid, untaxedPaymentUuid, partialDeleteReason);
+
+		String lastDeleteReason = "Delete last active payment";
+		deletePaymentAndAssert(billUuid, taxedPaymentUuid, lastDeleteReason);
+		getBill(billUuid);
+		lineItems = getBillLineItems(billUuid);
+		taxedLine = findLineByService(lineItems, SERVICE_4_UUID);
+		untaxedLine = findLineByService(lineItems, SERVICE_5_UUID);
+		assertPersistedBillState(billUuid, "PENDING", "940.00", "0");
+		assertPersistedActivePaymentCount(billUuid, 0);
+		assertEquals("PENDING", stringValue(taxedLine.get("paymentStatus")));
+		assertEquals("PENDING", stringValue(untaxedLine.get("paymentStatus")));
+		assertAmount("0", taxedLine.get("totalAllocated"));
+		assertAmount("0", untaxedLine.get("totalAllocated"));
+		assertPaymentAndAllocationsVoided(billUuid, taxedPaymentUuid, lastDeleteReason);
 	}
 
 	private Map<String, Object> getLineItem(String uuid) throws Exception {
@@ -254,7 +381,6 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 
 		private Map<String, Object> getBill(String uuid) throws Exception {
 			MvcResult result = mockMvc.perform(get(BILL_RESOURCE + "/" + uuid)
-		        .param("v", "full")
 		        .accept(MediaType.APPLICATION_JSON))
 		        .andReturn();
 		assertSuccess(result);
@@ -296,6 +422,7 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			lineItem.put("priceUuid", billLineItem.getItemPrice() != null ? billLineItem.getItemPrice().getUuid() : "");
 			lineItem.put("lineItemOrder", billLineItem.getLineItemOrder());
 			lineItem.put("paymentStatus", billLineItem.getPaymentStatus());
+			lineItem.put("discounts", serializedDiscounts(billLineItem));
 			lineItem.put("totalDiscount", billLineItem.getTotalDiscount());
 			lineItem.put("totalTax", billLineItem.getTotalTax());
 			lineItem.put("total", billLineItem.getTotal());
@@ -307,12 +434,40 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		return normalizeLineItems(lineItems);
 	}
 
+	private List<Map<String, Object>> serializedDiscounts(BillLineItem billLineItem) {
+		List<Map<String, Object>> discounts = new ArrayList<Map<String, Object>>();
+		if (billLineItem.getAdjustments() == null) {
+			return discounts;
+		}
+		for (BillLineItemAdjustment adjustment : billLineItem.getAdjustments()) {
+			if (adjustment == null || Boolean.TRUE.equals(adjustment.getVoided())
+			        || !"DISCOUNT".equalsIgnoreCase(adjustment.getAdjustmentType())) {
+				continue;
+			}
+			Map<String, Object> discount = new java.util.HashMap<String, Object>();
+			discount.put("amount", adjustment.getAmount());
+			discount.put("baseAmount", adjustment.getBaseAmount());
+			discount.put("description", adjustment.getDescription());
+			discount.put("sponsor", adjustment.getDiscountSponsor() == null ? null : adjustment.getDiscountSponsor().getUuid());
+			discounts.add(discount);
+		}
+		return discounts;
+	}
+
 	private MvcResult postRequest(String path, String json) throws Exception {
 		return mockMvc.perform(post(path)
 		        .contentType(MediaType.APPLICATION_JSON)
 		        .accept(MediaType.APPLICATION_JSON)
 		        .content(json))
 		        .andReturn();
+	}
+
+	private void deletePaymentAndAssert(String billUuid, String paymentUuid, String reason) throws Exception {
+		MvcResult result = mockMvc.perform(delete(BILL_RESOURCE + "/" + billUuid + "/payment/" + paymentUuid)
+		        .param("reason", reason)
+		        .accept(MediaType.APPLICATION_JSON))
+		        .andReturn();
+		assertSuccess(result);
 	}
 
 	private Map<String, Object> postJson(String path, String json) throws Exception {
@@ -343,15 +498,110 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		return postLineItem(lineItemUuid, json);
 	}
 
+	private void addVoidedDiscountAdjustment(String billUuid, String lineItemUuid, String description) {
+		IBillService billService = Context.getService(IBillService.class);
+		Bill bill = billService.getByUuid(billUuid);
+		BillLineItem lineItem = persistedLineByUuid(bill, lineItemUuid);
+		BillLineItemAdjustment adjustment = new BillLineItemAdjustment();
+		adjustment.setAdjustmentType("DISCOUNT");
+		adjustment.setAmount(new BigDecimal("999.00"));
+		adjustment.setBaseAmount(new BigDecimal("999.00"));
+		adjustment.setDescription(description);
+		adjustment.setCreator(Context.getAuthenticatedUser());
+		adjustment.setDateCreated(new java.util.Date());
+		adjustment.setVoided(true);
+		adjustment.setUuid(java.util.UUID.randomUUID().toString());
+		lineItem.addAdjustment(adjustment);
+		billService.save(bill);
+	}
+
+	private void assertVoidedDiscountStillVoided(String billUuid, String lineItemUuid, String description) {
+		Bill bill = Context.getService(IBillService.class).getByUuid(billUuid);
+		BillLineItem lineItem = persistedLineByUuid(bill, lineItemUuid);
+		boolean found = false;
+		for (BillLineItemAdjustment adjustment : lineItem.getAdjustments()) {
+			if (adjustment != null && "DISCOUNT".equalsIgnoreCase(adjustment.getAdjustmentType())
+			        && description.equals(adjustment.getDescription())) {
+				found = true;
+				assertTrue("Historical discount should remain voided", Boolean.TRUE.equals(adjustment.getVoided()));
+			}
+		}
+		assertTrue("Expected voided historical discount adjustment", found);
+	}
+
+	private void assertPaymentAndAllocationsVoided(String billUuid, String paymentUuid, String reason) {
+		Payment payment = persistedPaymentByUuid(billUuid, paymentUuid);
+		assertTrue("Expected deleted payment to remain voided", Boolean.TRUE.equals(payment.getVoided()));
+		assertEquals(reason, payment.getVoidReason());
+		assertNotNull("Expected deleted payment to retain voidedBy", payment.getVoidedBy());
+		assertNotNull("Expected deleted payment allocations to be retained", payment.getAllocations());
+		assertTrue("Expected deleted payment to retain allocation history", !payment.getAllocations().isEmpty());
+		for (LinePaymentAllocation allocation : payment.getAllocations()) {
+			assertTrue("Expected deleted payment allocation to remain voided", Boolean.TRUE.equals(allocation.getVoided()));
+			assertEquals(reason, allocation.getVoidReason());
+			assertNotNull("Expected deleted allocation to retain voidedBy", allocation.getVoidedBy());
+		}
+	}
+
+	private Payment persistedPaymentByUuid(String billUuid, String paymentUuid) {
+		Bill bill = Context.getService(IBillService.class).getByUuid(billUuid);
+		assertNotNull("Expected bill to exist", bill);
+		for (Payment payment : bill.getPayments()) {
+			if (payment != null && paymentUuid.equals(payment.getUuid())) {
+				return payment;
+			}
+		}
+		throw new AssertionError("Expected persisted payment with UUID " + paymentUuid);
+	}
+
+	private void assertPersistedBillState(String billUuid, String expectedStatus, String expectedBalance,
+	        String expectedTotalActualPayments) {
+		Bill bill = Context.getService(IBillService.class).getByUuid(billUuid);
+		assertNotNull("Expected bill to exist", bill);
+		assertEquals(expectedStatus, stringValue(bill.getStatus()));
+		assertAmount(expectedBalance, bill.getBalance());
+		assertAmount(expectedTotalActualPayments, bill.getTotalActualPayments());
+	}
+
+	private void assertPersistedActivePaymentCount(String billUuid, int expectedCount) {
+		Bill bill = Context.getService(IBillService.class).getByUuid(billUuid);
+		assertNotNull("Expected bill to exist", bill);
+		int activePaymentCount = 0;
+		for (Payment payment : bill.getPayments()) {
+			if (payment != null && !Boolean.TRUE.equals(payment.getVoided())) {
+				activePaymentCount++;
+			}
+		}
+		assertEquals(Integer.valueOf(expectedCount), Integer.valueOf(activePaymentCount));
+	}
+
+	private BillLineItem persistedLineByUuid(Bill bill, String lineItemUuid) {
+		assertNotNull("Expected bill to exist", bill);
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem != null && lineItemUuid.equals(lineItem.getUuid())) {
+				return lineItem;
+			}
+		}
+		throw new AssertionError("Expected persisted line item with UUID " + lineItemUuid);
+	}
+
 	private Map<String, Object> postAdditionalDiscount(String billUuid, String amount) throws Exception {
 		MvcResult result = postAdditionalDiscountResult(billUuid, amount);
 		assertSuccess(result);
 		return parse(result);
 	}
 
+	private Map<String, Object> postAdditionalDiscount(String billUuid, String amount, String sponsor, String comment)
+	        throws Exception {
+		MvcResult result = postRequest(BILL_ACTION_RESOURCE + "/" + billUuid + "/additional-discount",
+		    "{\"discounts\":" + amount + ",\"sponsor\":\"" + sponsor + "\",\"comment\":\"" + comment + "\"}");
+		assertSuccess(result);
+		return parse(result);
+	}
+
 	private MvcResult postAdditionalDiscountResult(String billUuid, String amount) throws Exception {
 		return postRequest(BILL_ACTION_RESOURCE + "/" + billUuid + "/additional-discount",
-		    "{\"additionalDiscount\":" + amount + "}");
+		    "{\"discounts\":" + amount + "}");
 	}
 
 	private List<Map<String, Object>> normalizeLineItems(List<Map<String, Object>> lineItems) {
@@ -402,6 +652,18 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 			return descriptions.toString();
 		}
 
+	@SuppressWarnings("unchecked")
+	private void assertActivePaymentCount(Map<String, Object> bill, int expectedCount) {
+		Object paymentsValue = bill.get("payments");
+		assertTrue("Expected bill representation to contain payments", paymentsValue instanceof List);
+		List<Map<String, Object>> payments = (List<Map<String, Object>>) paymentsValue;
+		assertEquals(Integer.valueOf(expectedCount), Integer.valueOf(payments.size()));
+		for (Map<String, Object> payment : payments) {
+			assertTrue("Expected fetched bill representation to exclude voided payments",
+			    !Boolean.TRUE.equals(payment.get("voided")));
+		}
+	}
+
 	private void closeBillAndAssert(String billUuid, String reason) throws Exception {
 		Map<String, Object> closed = postJson(BILL_ACTION_RESOURCE + "/" + billUuid + "/close", closePayload(reason));
 		assertEquals(Boolean.TRUE, closed.get("closed"));
@@ -441,6 +703,16 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		private String additionalDiscountBillPayload() {
 			return billPayloadFromJsonLines(
 			    linePayloadWithDiscount(SERVICE_4_UUID, PRICE_400_UUID, "400", "40", "Taxed discount line"));
+		}
+
+		private String taxedBillPayload() {
+			return billPayloadFromJsonLines(linePayload(SERVICE_4_UUID, PRICE_400_UUID, "400", "Taxed line"));
+		}
+
+		private String taxedAndUntaxedBillPayload() {
+			return billPayloadFromJsonLines(
+			    linePayload(SERVICE_4_UUID, PRICE_400_UUID, "400", "Taxed line"),
+			    linePayload(SERVICE_5_UUID, PRICE_500_UUID, "500", "Untaxed line"));
 		}
 
 	private String billPayload(List<Map<String, Object>> existingLines, String newLineOne, String newLineTwo) {
@@ -550,6 +822,23 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 		        + "\"quantity\":" + numberString(line.get("quantity")) + ","
 		        + "\"paymentStatus\":\"" + stringValue(line.get("paymentStatus")) + "\""
 		        + reasonJson(reason)
+		        + "}";
+	}
+
+	private String existingLinePayloadWithDiscount(Map<String, Object> line, String billableServiceUuid, String priceUuid,
+	        String price, String discountAmount, String description) {
+		return "{"
+		        + "\"uuid\":\"" + stringValue(line.get("uuid")) + "\"," +
+		        "\"billableService\":\"" + billableServiceUuid + "\"," +
+		        "\"priceUuid\":\"" + priceUuid + "\"," +
+		        "\"price\":" + price + ","
+		        + "\"quantity\":" + numberString(line.get("quantity")) + ","
+		        + "\"paymentStatus\":\"" + stringValue(line.get("paymentStatus")) + "\","
+		        + "\"discounts\":[{"
+		        + "\"amount\":" + discountAmount + ","
+		        + "\"baseAmount\":" + price + ","
+		        + "\"description\":\"" + description + "\""
+		        + "}]"
 		        + "}";
 	}
 
@@ -690,6 +979,21 @@ public class InlinePriceEditingRestSmokeTest extends BaseModuleContextSensitiveT
 	@SuppressWarnings("unchecked")
 	private BigDecimal lineDiscountAmount(Map<String, Object> lineItem) {
 		return adjustmentTotal(lineItem, "totalDiscount", "discounts");
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertLineDiscountMetadata(Map<String, Object> lineItem, String sponsorUuid, String description) {
+		Object discountsValue = lineItem.get("discounts");
+		assertTrue("Expected serialized discounts", discountsValue instanceof List);
+		List<Map<String, Object>> discounts = (List<Map<String, Object>>) discountsValue;
+		assertEquals("Expected one active discount", Integer.valueOf(1), Integer.valueOf(discounts.size()));
+		Map<String, Object> discount = discounts.get(0);
+		assertEquals(description, stringValue(discount.get("description")));
+		if (sponsorUuid == null) {
+			assertEquals(null, discount.get("sponsor"));
+		} else {
+			assertEquals(sponsorUuid, stringValue(discount.get("sponsor")));
+		}
 	}
 
 	@SuppressWarnings("unchecked")

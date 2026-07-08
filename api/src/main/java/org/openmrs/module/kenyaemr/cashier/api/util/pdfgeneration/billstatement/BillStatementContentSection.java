@@ -98,7 +98,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         itemsTable.addHeaderCell(createHeaderCell("Service/Item Description", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Qty"));
         itemsTable.addHeaderCell(createHeaderCell("Unit Price", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Discount", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Discounts", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Tax", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Date Added", TextAlignment.CENTER));
@@ -240,7 +240,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         summaryTable.addCell(createSummaryLabelCell("Subtotal:"));
         summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(subtotalAmount)));
 
-        summaryTable.addCell(createSummaryLabelCell("Total Discount:"));
+        summaryTable.addCell(createSummaryLabelCell("Discounts:"));
         summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalDiscount)));
 
         summaryTable.addCell(createSummaryLabelCell("Total Tax:"));

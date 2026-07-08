@@ -52,7 +52,6 @@ public class Bill extends BaseOpenmrsData {
 	private String closeReason;
 	private User closedBy;
 	private Date dateClosed;
-	private BigDecimal additionalDiscount = BigDecimal.ZERO;
 
 	public String getAdjustmentReason() {
 		return adjustmentReason;
@@ -204,15 +203,15 @@ public class Bill extends BaseOpenmrsData {
 	}
 
 	public BigDecimal getAdditionalDiscount() {
-		return additionalDiscount == null ? BigDecimal.ZERO : additionalDiscount;
+		return BigDecimal.ZERO;
 	}
 
 	public void setAdditionalDiscount(BigDecimal additionalDiscount) {
-		this.additionalDiscount = additionalDiscount;
+		// Legacy mapped property. Discounts are sourced from line-item adjustments only.
 	}
 
 	public BigDecimal getDiscountedTotal() {
-		return getTotal().subtract(getAdditionalDiscount());
+		return getTotal();
 	}
 
 	public BigDecimal getAdditionalDiscountEligibleAmount() {
@@ -246,7 +245,7 @@ public class Bill extends BaseOpenmrsData {
 	public void updateAdditionalDiscount(BigDecimal amount) {
 		BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
 		validateAdditionalDiscountAmount(normalizedAmount);
-		setAdditionalDiscount(normalizedAmount);
+		setAdditionalDiscount(BigDecimal.ZERO);
 		synchronizeBillStatus();
 	}
 
@@ -314,10 +313,10 @@ public class Bill extends BaseOpenmrsData {
 
 	/**
 	 * Gets the remaining balance for this bill.
-	 * @return The balance amount (total bill amount - additional discount - actual payments - waivers - deposits)
+	 * @return The balance amount (total bill amount - actual payments - waivers - deposits)
 	 */
 	public BigDecimal getBalance() {
-		BigDecimal totalBillAmount = getDiscountedTotal();
+		BigDecimal totalBillAmount = getTotal();
 		BigDecimal totalActualPayments = getTotalActualPayments();
 		BigDecimal totalWaivers = getTotalWaivers();
 		BigDecimal totalDeposits = getTotalDeposits();
@@ -495,8 +494,8 @@ public class Bill extends BaseOpenmrsData {
 	}
 
 	public void synchronizeBillStatus() {
-		BigDecimal discountedTotal = getDiscountedTotal();
-		if (hasActiveLineItems() && discountedTotal.compareTo(BigDecimal.ZERO) <= 0) {
+		BigDecimal total = getTotal();
+		if (hasActiveLineItems() && total.compareTo(BigDecimal.ZERO) <= 0) {
 			this.setStatus(BillStatus.PAID);
 			return;
 		}
@@ -507,7 +506,7 @@ public class Bill extends BaseOpenmrsData {
 
 		BillStatus newStatus;
 		if (totalSettled.compareTo(BigDecimal.ZERO) > 0) {
-			boolean billFullySettled = totalSettled.compareTo(discountedTotal) >= 0;
+			boolean billFullySettled = totalSettled.compareTo(total) >= 0;
 			newStatus = billFullySettled ? BillStatus.PAID : BillStatus.POSTED;
 		} else {
 			// No active payments remain (e.g. all voided) — revert to PENDING.

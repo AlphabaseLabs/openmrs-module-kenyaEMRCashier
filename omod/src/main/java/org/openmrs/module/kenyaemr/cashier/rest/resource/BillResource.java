@@ -539,7 +539,8 @@ public class BillResource extends BaseRestDataResource<Bill> {
 
 	@PropertySetter("additionalDiscount")
 	public void setAdditionalDiscount(Bill instance, Object additionalDiscount) {
-		instance.setAdditionalDiscount(parseBigDecimal(additionalDiscount, "additionalDiscount"));
+		// Legacy compatibility field. Discounts are sourced from line-item adjustments only.
+		instance.setAdditionalDiscount(BigDecimal.ZERO);
 	}
 
 	@PropertyGetter("lineItems")

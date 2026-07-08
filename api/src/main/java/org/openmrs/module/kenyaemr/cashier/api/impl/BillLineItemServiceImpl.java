@@ -66,6 +66,7 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 	public BillLineItem save(BillLineItem object) {
 		normalizePriceOverride(object);
 		applyTaxes(object);
+		synchronizeSettlement(object);
 		return super.save(object);
 	}
 
@@ -73,12 +74,24 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 	public BillLineItem saveAll(BillLineItem object, Collection<? extends OpenmrsObject> related) {
 		normalizePriceOverride(object);
 		applyTaxes(object);
+		synchronizeSettlement(object);
 		return super.saveAll(object, related);
 	}
 
 	private void normalizePriceOverride(BillLineItem object) {
 		if (object != null) {
 			object.normalizePriceOverride();
+		}
+	}
+
+	private void synchronizeSettlement(BillLineItem object) {
+		if (object == null) {
+			return;
+		}
+		object.synchronizePaymentStatus();
+		if (object.getBill() != null) {
+			object.getBill().synchronizeBillStatus();
+			object.getBill().setAdditionalDiscount(BigDecimal.ZERO);
 		}
 	}
 

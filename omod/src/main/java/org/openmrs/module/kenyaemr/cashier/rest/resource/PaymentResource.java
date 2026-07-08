@@ -273,7 +273,21 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 			}
 		}
 
+		synchronizePaymentDeletion(bill);
 		service.save(bill);
+	}
+
+	private void synchronizePaymentDeletion(Bill bill) {
+		if (bill == null || bill.getLineItems() == null) {
+			return;
+		}
+
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem != null) {
+				lineItem.synchronizePaymentStatus();
+			}
+		}
+		bill.synchronizeBillStatus();
 	}
 
 	@Override

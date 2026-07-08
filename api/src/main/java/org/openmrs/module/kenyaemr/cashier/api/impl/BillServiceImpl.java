@@ -1564,7 +1564,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(" "));
-		totalsSection.addCell(new Paragraph("Discount")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
+		totalsSection.addCell(new Paragraph("Discounts")).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();
 		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(" "));
 		totalsSection.addCell(new Paragraph(df.format(bill.getTotalDiscount()))).setFontSize(10).setTextAlignment(TextAlignment.RIGHT).setFont(helvetica).setBold();

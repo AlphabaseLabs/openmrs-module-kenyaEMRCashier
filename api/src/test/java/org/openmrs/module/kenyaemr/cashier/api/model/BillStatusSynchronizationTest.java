@@ -64,22 +64,22 @@ public class BillStatusSynchronizationTest {
 	}
 
 	@Test
-	public void getBalance_shouldSubtractAdditionalDiscountWithoutChangingBillTotal() {
-		BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
+	public void getBalance_shouldIgnoreLegacyAdditionalDiscountWhenLineDiscountExists() {
+		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(300), BigDecimal.valueOf(50));
 		Bill bill = createBill(lineItem);
 		bill.setAdditionalDiscount(BigDecimal.valueOf(50));
 
 		bill.synchronizeBillStatus();
 
-		assertEquals(0, bill.getTotal().compareTo(BigDecimal.valueOf(300)));
-		assertEquals(0, bill.getAdditionalDiscount().compareTo(BigDecimal.valueOf(50)));
+		assertEquals(0, bill.getTotal().compareTo(BigDecimal.valueOf(250)));
+		assertEquals(0, bill.getAdditionalDiscount().compareTo(BigDecimal.ZERO));
 		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(250)));
 		assertEquals(BillStatus.PENDING, bill.getStatus());
 	}
 
 	@Test
-	public void synchronizeBillStatus_shouldMarkBillPaidWhenPaymentCoversDiscountedTotal() {
-		BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
+	public void synchronizeBillStatus_shouldMarkBillPaidWhenPaymentCoversLineTotalWithLegacyAdditionalDiscount() {
+		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(300), BigDecimal.valueOf(50));
 		Bill bill = createBill(lineItem);
 		bill.setAdditionalDiscount(BigDecimal.valueOf(50));
 
@@ -116,10 +116,11 @@ public class BillStatusSynchronizationTest {
 		}
 
 		@Test
-		public void updateAdditionalDiscount_shouldRecalculateBalanceAndStatusWhenDiscountIsCleared() {
+		public void updateAdditionalDiscount_shouldNormalizeLegacyAmountWithoutChangingBalance() {
 			BillLineItem lineItem = createLineItemWithStatus(BigDecimal.valueOf(300), BillStatus.PENDING, BigDecimal.ZERO);
 			Bill bill = createBill(lineItem);
 			bill.setAdditionalDiscount(BigDecimal.valueOf(100));
+			assertEquals(0, bill.getAdditionalDiscount().compareTo(BigDecimal.ZERO));
 
 			Payment payment = new Payment();
 			payment.setAmount(BigDecimal.valueOf(200));
@@ -129,8 +130,8 @@ public class BillStatusSynchronizationTest {
 			bill.setPayments(Collections.singleton(payment));
 
 			bill.synchronizeBillStatus();
-			assertEquals(BillStatus.PAID, bill.getStatus());
-			assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
+			assertEquals(BillStatus.POSTED, bill.getStatus());
+			assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(100)));
 
 			bill.updateAdditionalDiscount(BigDecimal.ZERO);
 

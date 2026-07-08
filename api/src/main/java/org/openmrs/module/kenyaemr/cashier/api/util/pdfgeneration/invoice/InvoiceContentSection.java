@@ -53,7 +53,7 @@ public class InvoiceContentSection
         itemsTable.addHeaderCell(createHeaderCell("Chargeable service/Item", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Quantity"));
         itemsTable.addHeaderCell(createHeaderCell("Unit price", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Discount", TextAlignment.LEFT));
+        itemsTable.addHeaderCell(createHeaderCell("Discounts", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Tax", TextAlignment.LEFT));
         itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
 
@@ -84,7 +84,7 @@ public class InvoiceContentSection
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.RIGHT)
                 .setMarginBottom(SUMMARY_SPACING);
-        Paragraph discountSummary = new Paragraph("Total Discount: " + CurrencyUtil.formatCurrency(bill.getTotalDiscount()))
+        Paragraph discountSummary = new Paragraph("Discounts: " + CurrencyUtil.formatCurrency(bill.getTotalDiscount()))
                 .setBold()
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.RIGHT)
