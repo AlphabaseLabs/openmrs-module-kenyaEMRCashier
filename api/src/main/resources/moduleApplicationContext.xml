@@ -45,6 +45,14 @@
 	<bean parent="serviceContext">
 		<property name="moduleService">
 			<list merge="true">
+				<value>org.openmrs.module.kenyaemr.cashier.api.PaymentAllocationRebalanceService</value>
+				<ref bean="paymentAllocationRebalanceService" />
+			</list>
+		</property>
+	</bean>
+	<bean parent="serviceContext">
+		<property name="moduleService">
+			<list merge="true">
 				<value>org.openmrs.module.kenyaemr.cashier.api.IPaymentModeService</value>
 				<ref bean="cashierPaymentModeService" />
 			</list>
@@ -165,7 +173,16 @@
 		<property name="target">
 			<bean class="org.openmrs.module.kenyaemr.cashier.api.impl.BillServiceImpl">
 				<property name="repository" ref="genericRepositoryDao" />
+				<property name="paymentAllocationRebalanceService" ref="paymentAllocationRebalanceService" />
 			</bean>
+		</property>
+		<property name="preInterceptors" ref="serviceInterceptors" />
+		<property name="transactionAttributeSource" ref="transactionAttributeSource" />
+	</bean>
+	<bean id="paymentAllocationRebalanceService" class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+		<property name="transactionManager" ref="transactionManager" />
+		<property name="target">
+			<bean class="org.openmrs.module.kenyaemr.cashier.api.impl.PaymentAllocationRebalanceServiceImpl" />
 		</property>
 		<property name="preInterceptors" ref="serviceInterceptors" />
 		<property name="transactionAttributeSource" ref="transactionAttributeSource" />

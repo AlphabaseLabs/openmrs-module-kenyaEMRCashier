@@ -4,6 +4,7 @@ import org.hibernate.Criteria;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.openmrs.module.kenyaemr.cashier.api.BillLineItemService;
+import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IBillableItemsService;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.impl.BaseEntityDataServiceImpl;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.security.IEntityAuthorizationPrivileges;
@@ -66,6 +67,7 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 	public BillLineItem save(BillLineItem object) {
 		normalizePriceOverride(object);
 		applyTaxes(object);
+		rebalancePaymentAllocations(object);
 		synchronizeSettlement(object);
 		return super.save(object);
 	}
@@ -74,6 +76,7 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 	public BillLineItem saveAll(BillLineItem object, Collection<? extends OpenmrsObject> related) {
 		normalizePriceOverride(object);
 		applyTaxes(object);
+		rebalancePaymentAllocations(object);
 		synchronizeSettlement(object);
 		return super.saveAll(object, related);
 	}
@@ -92,6 +95,20 @@ public class BillLineItemServiceImpl extends BaseEntityDataServiceImpl<BillLineI
 		if (object.getBill() != null) {
 			object.getBill().synchronizeBillStatus();
 		}
+	}
+
+	private void rebalancePaymentAllocations(BillLineItem object) {
+		if (!shouldRebalancePaymentAllocations(object)) {
+			return;
+		}
+		Context.getService(IBillService.class).rebalancePaymentAllocations(object.getBill(), object);
+	}
+
+	private boolean shouldRebalancePaymentAllocations(BillLineItem object) {
+		if (object == null || object.getBill() == null) {
+			return false;
+		}
+		return object.getTotalAllocated().compareTo(object.getNetTotal()) > 0;
 	}
 
 	@Override

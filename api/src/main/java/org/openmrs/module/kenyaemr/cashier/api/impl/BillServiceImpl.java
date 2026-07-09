@@ -53,6 +53,7 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IDepositService;
+import org.openmrs.module.kenyaemr.cashier.api.PaymentAllocationRebalanceService;
 import org.openmrs.module.kenyaemr.cashier.api.IReceiptNumberGenerator;
 import org.openmrs.module.kenyaemr.cashier.api.ReceiptNumberGeneratorFactory;
 import org.openmrs.module.kenyaemr.cashier.api.ITimesheetService;
@@ -103,7 +104,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -129,10 +129,15 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	private static final String WAIVER_PAYMENT_METHOD = "Waiver";
 	private static final String REFERENCE_NUMBER_DESCRIPTION = "Reference Number";
 
+	private PaymentAllocationRebalanceService paymentAllocationRebalanceService;
 
 	@Override
 	protected IEntityAuthorizationPrivileges getPrivileges() {
 		return this;
+	}
+
+	public void setPaymentAllocationRebalanceService(PaymentAllocationRebalanceService paymentAllocationRebalanceService) {
+		this.paymentAllocationRebalanceService = paymentAllocationRebalanceService;
 	}
 	DecimalFormat df = new DecimalFormat("0.00");
 
@@ -531,8 +536,14 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		return getPaymentAmountForAllocation(payment).compareTo(BigDecimal.ZERO) > 0;
 	}
 
+	@Override
+	@Transactional
+	public void rebalancePaymentAllocations(Bill bill, BillLineItem changedLineItem) {
+		getPaymentAllocationRebalanceService().rebalancePaymentAllocations(bill, changedLineItem);
+	}
+
 	private User resolveAllocationCreator(Bill bill, Payment payment, BillLineItem lineItem) {
-		User authenticated = Context.getAuthenticatedUser();
+		User authenticated = getAuthenticatedUser();
 		if (authenticated != null) {
 			return authenticated;
 		}
@@ -546,6 +557,13 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			return bill.getCreator();
 		}
 		return Context.getUserService().getUser(1);
+	}
+
+	private PaymentAllocationRebalanceService getPaymentAllocationRebalanceService() {
+		if (paymentAllocationRebalanceService == null) {
+			paymentAllocationRebalanceService = Context.getService(PaymentAllocationRebalanceService.class);
+		}
+		return paymentAllocationRebalanceService;
 	}
 
 	@Override

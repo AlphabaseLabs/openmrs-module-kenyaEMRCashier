@@ -22,6 +22,7 @@ import org.openmrs.annotation.Authorized;
 import org.openmrs.module.kenyaemr.cashier.api.base.PagingInfo;
 import org.openmrs.module.kenyaemr.cashier.api.base.entity.IEntityDataService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistoryMetricsSummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistorySummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.HistorySearchCriteria;
@@ -146,6 +147,14 @@ public interface IBillService extends IEntityDataService<Bill> {
 	 */
 	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
 	Bill syncBillStatus(String billUuid);
+
+	/**
+	 * Corrects payment allocations for a changed line item that is allocated above its current net total.
+	 * @param bill The bill that owns the changed line item.
+	 * @param changedLineItem The line item whose current allocation may exceed its net total.
+	 */
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	void rebalancePaymentAllocations(Bill bill, BillLineItem changedLineItem);
 
 	/**
 	 * Searches for non-closed bills for a patient created on the same day.
