@@ -177,6 +177,46 @@ public class BillServiceImplPaymentRebalanceTest {
 		assertEquals(BillStatus.PAID, bill.getStatus());
 	}
 
+	@Test
+	public void rebalancePaymentAllocations_shouldCascadeBackwardToEarlierLinesWhenChangedLineIsLast() {
+		BillLineItem earlierLine = createLineItem("earlier-line", 100, BillStatus.PENDING);
+		BillLineItem changedLine = createLineItem("changed-line", 60, BillStatus.PAID);
+		Bill bill = createBill(earlierLine, changedLine);
+
+		Payment payment = createPayment("Cash", 100);
+		addPayment(bill, payment);
+		addAllocation(bill, payment, changedLine, 100, 1000L);
+
+		paymentAllocationRebalanceService.rebalancePaymentAllocations(bill, changedLine);
+
+		assertAmount(60, changedLine.getTotalAllocated());
+		assertAmount(40, earlierLine.getTotalAllocated());
+		assertEquals(BillStatus.PAID, changedLine.getPaymentStatus());
+		assertEquals(BillStatus.POSTED, earlierLine.getPaymentStatus());
+	}
+
+	@Test
+	public void rebalancePaymentAllocations_shouldCascadeForwardThenBackwardWhenForwardLinesInsufficient() {
+		BillLineItem earlierLine = createLineItem("earlier-line", 30, BillStatus.PENDING);
+		BillLineItem changedLine = createLineItem("changed-line", 20, BillStatus.PAID);
+		BillLineItem laterLine = createLineItem("later-line", 10, BillStatus.PENDING);
+		Bill bill = createBill(earlierLine, changedLine, laterLine);
+
+		Payment payment = createPayment("Cash", 100);
+		addPayment(bill, payment);
+		addAllocation(bill, payment, changedLine, 80, 1000L);
+
+		paymentAllocationRebalanceService.rebalancePaymentAllocations(bill, changedLine);
+
+		assertAmount(20, changedLine.getTotalAllocated());
+		assertAmount(10, laterLine.getTotalAllocated());
+		assertAmount(30, earlierLine.getTotalAllocated());
+		assertEquals(BillStatus.PAID, changedLine.getPaymentStatus());
+		assertEquals(BillStatus.PAID, laterLine.getPaymentStatus());
+		assertEquals(BillStatus.PAID, earlierLine.getPaymentStatus());
+		assertEquals(BillStatus.PAID, bill.getStatus());
+	}
+
 	private Bill createBill(BillLineItem... lineItems) {
 		Bill bill = new Bill();
 		bill.setVoided(false);

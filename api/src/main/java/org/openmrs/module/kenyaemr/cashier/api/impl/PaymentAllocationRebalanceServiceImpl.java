@@ -58,6 +58,7 @@ public class PaymentAllocationRebalanceServiceImpl implements PaymentAllocationR
 		Set<BillLineItem> affectedLineItems = new HashSet<BillLineItem>();
 		affectedLineItems.add(changedLine);
 		reallocateReleasedChunks(bill, lineItemsInBillOrder, changedLineIndex + 1, releasedChunks, affectedLineItems);
+		reallocateReleasedChunks(bill, lineItemsInBillOrder, 0, changedLineIndex, releasedChunks, affectedLineItems);
 		synchronizeAffectedStatuses(bill, affectedLineItems);
 	}
 
@@ -196,12 +197,18 @@ public class PaymentAllocationRebalanceServiceImpl implements PaymentAllocationR
 
 	private void reallocateReleasedChunks(Bill bill, List<BillLineItem> lineItems, int firstRecipientIndex,
 	        List<ReleasedPaymentChunk> releasedChunks, Set<BillLineItem> affectedLineItems) {
+		reallocateReleasedChunks(bill, lineItems, firstRecipientIndex, lineItems.size(), releasedChunks,
+		    affectedLineItems);
+	}
+
+	private void reallocateReleasedChunks(Bill bill, List<BillLineItem> lineItems, int firstRecipientIndex,
+	        int exclusiveEndIndex, List<ReleasedPaymentChunk> releasedChunks, Set<BillLineItem> affectedLineItems) {
 		for (ReleasedPaymentChunk chunk : releasedChunks) {
 			if (chunk == null || chunk.payment == null || chunk.remainingAmount.compareTo(BigDecimal.ZERO) <= 0
 			        || !isAllocatablePayment(chunk.payment)) {
 				continue;
 			}
-			for (int i = firstRecipientIndex; i < lineItems.size(); i++) {
+			for (int i = firstRecipientIndex; i < exclusiveEndIndex; i++) {
 				if (chunk.remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
 					break;
 				}
