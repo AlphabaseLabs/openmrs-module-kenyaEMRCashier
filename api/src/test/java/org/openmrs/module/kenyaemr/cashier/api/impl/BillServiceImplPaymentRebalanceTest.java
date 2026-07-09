@@ -42,6 +42,75 @@ public class BillServiceImplPaymentRebalanceTest {
 	};
 
 	@Test
+	public void rebalancePaymentAllocations_shouldWrapLeftoverReleasedAmountToEarlierEligibleLine() {
+		BillLineItem earlierLine = createLineItem("earlier-line", 1500, BillStatus.PENDING, 3);
+		BillLineItem changedLine = createLineItem("changed-line", 0, BillStatus.PAID, 8);
+		BillLineItem laterLine = createLineItem("later-line", 450, BillStatus.POSTED, 9);
+		Bill bill = createBill(earlierLine, changedLine, laterLine);
+
+		Payment payment = createPayment("Cash", 500);
+		addPayment(bill, payment);
+		LinePaymentAllocation changedAllocation = addAllocation(bill, payment, changedLine, 450, 1000L);
+		LinePaymentAllocation laterExistingAllocation = addAllocation(bill, payment, laterLine, 50, 2000L);
+
+		paymentAllocationRebalanceService.rebalancePaymentAllocations(bill, changedLine);
+
+		assertTrue(changedAllocation.getVoided());
+		assertFalse(laterExistingAllocation.getVoided());
+		assertAmount(0, changedLine.getTotalAllocated());
+		assertAmount(450, laterLine.getTotalAllocated());
+		assertAmount(50, earlierLine.getTotalAllocated());
+		assertAmount(500, payment.getTotalAllocated());
+		assertEquals(BillStatus.PAID, changedLine.getPaymentStatus());
+		assertEquals(BillStatus.PAID, laterLine.getPaymentStatus());
+		assertEquals(BillStatus.POSTED, earlierLine.getPaymentStatus());
+		assertEquals(BillStatus.POSTED, bill.getStatus());
+	}
+
+	@Test
+	public void rebalancePaymentAllocations_shouldUseLineItemOrderInsteadOfCollectionOrder() {
+		BillLineItem changedLine = createLineItem("changed-line", 0, BillStatus.PAID, 2);
+		BillLineItem earlierLine = createLineItem("earlier-line", 100, BillStatus.PENDING, 1);
+		BillLineItem laterLine = createLineItem("later-line", 80, BillStatus.PENDING, 3);
+		Bill bill = createBill(changedLine, earlierLine, laterLine);
+
+		Payment payment = createPayment("Cash", 80);
+		addPayment(bill, payment);
+		addAllocation(bill, payment, changedLine, 80, 1000L);
+
+		paymentAllocationRebalanceService.rebalancePaymentAllocations(bill, changedLine);
+
+		assertAmount(0, earlierLine.getTotalAllocated());
+		assertAmount(80, laterLine.getTotalAllocated());
+		assertEquals(BillStatus.PENDING, earlierLine.getPaymentStatus());
+		assertEquals(BillStatus.PAID, laterLine.getPaymentStatus());
+	}
+
+	@Test
+	public void rebalancePaymentAllocations_shouldLeaveReleasedAmountUnallocatedWhenNoRecipientHasRemainingBalance() {
+		BillLineItem changedLine = createLineItem("changed-line", 60, BillStatus.PAID);
+		BillLineItem fullyAllocatedLine = createLineItem("fully-allocated-line", 40, BillStatus.PAID);
+		BillLineItem exemptedLine = createLineItem("exempted-line", 100, BillStatus.EXEMPTED);
+		BillLineItem voidedLine = createLineItem("voided-line", 100, BillStatus.PENDING);
+		voidedLine.setVoided(true);
+		Bill bill = createBill(changedLine, fullyAllocatedLine, exemptedLine, voidedLine);
+
+		Payment payment = createPayment("Cash", 140);
+		addPayment(bill, payment);
+		LinePaymentAllocation changedAllocation = addAllocation(bill, payment, changedLine, 100, 1000L);
+		LinePaymentAllocation fullyAllocatedLineAllocation = addAllocation(bill, payment, fullyAllocatedLine, 40, 2000L);
+
+		paymentAllocationRebalanceService.rebalancePaymentAllocations(bill, changedLine);
+
+		assertAmount(60, changedAllocation.getAllocatedAmount());
+		assertFalse(changedAllocation.getVoided());
+		assertSameAllocation(fullyAllocatedLine, fullyAllocatedLineAllocation);
+		assertNoAllocations(exemptedLine);
+		assertNoAllocations(voidedLine);
+		assertAmount(100, payment.getTotalAllocated());
+	}
+
+	@Test
 	public void rebalancePaymentAllocations_shouldTrimChangedLineAndCascadeReleasedAmountToNextLaterLine() {
 		BillLineItem earlierLine = createLineItem("earlier-line", 50, BillStatus.PAID);
 		BillLineItem changedLine = createLineItem("changed-line", 60, BillStatus.PAID);
@@ -237,6 +306,13 @@ public class BillServiceImplPaymentRebalanceTest {
 		lineItem.setPrice(BigDecimal.valueOf(netTotal));
 		lineItem.setQuantity(1);
 		lineItem.setPaymentStatus(status);
+		lineItem.setAllocations(new HashSet<LinePaymentAllocation>());
+		return lineItem;
+	}
+
+	private BillLineItem createLineItem(String uuid, int netTotal, BillStatus status, int lineItemOrder) {
+		BillLineItem lineItem = createLineItem(uuid, netTotal, status);
+		lineItem.setLineItemOrder(lineItemOrder);
 		return lineItem;
 	}
 
@@ -283,7 +359,7 @@ public class BillServiceImplPaymentRebalanceTest {
 	}
 
 	private void assertNoAllocations(BillLineItem lineItem) {
-		assertTrue(lineItem.getAllocations() == null || lineItem.getAllocations().isEmpty());
+		assertTrue(lineItem.getAllocations().isEmpty());
 	}
 
 	private void assertSameAllocation(BillLineItem lineItem, LinePaymentAllocation expectedAllocation) {

@@ -57,19 +57,49 @@ public class PaymentAllocationRebalanceServiceImpl implements PaymentAllocationR
 
 		Set<BillLineItem> affectedLineItems = new HashSet<BillLineItem>();
 		affectedLineItems.add(changedLine);
-		reallocateReleasedChunks(bill, lineItemsInBillOrder, changedLineIndex + 1, releasedChunks, affectedLineItems);
-		reallocateReleasedChunks(bill, lineItemsInBillOrder, 0, changedLineIndex, releasedChunks, affectedLineItems);
+		reallocateReleasedChunks(bill, getWrappedRecipientLineItems(lineItemsInBillOrder, changedLineIndex),
+		    releasedChunks, affectedLineItems);
 		synchronizeAffectedStatuses(bill, affectedLineItems);
 	}
 
 	private List<BillLineItem> getLineItemsInBillOrder(Bill bill) {
 		List<BillLineItem> lineItemsInBillOrder = new ArrayList<BillLineItem>();
 		for (BillLineItem lineItem : bill.getLineItems()) {
-			if (lineItem != null) {
+			if (lineItem != null && !Boolean.TRUE.equals(lineItem.getVoided())) {
 				lineItemsInBillOrder.add(lineItem);
 			}
 		}
+		Collections.sort(lineItemsInBillOrder, new Comparator<BillLineItem>() {
+			@Override
+			public int compare(BillLineItem left, BillLineItem right) {
+				return compareLineItemsInBillOrder(left, right);
+			}
+		});
 		return lineItemsInBillOrder;
+	}
+
+	private int compareLineItemsInBillOrder(BillLineItem left, BillLineItem right) {
+		int orderComparison = compareIntegersAscending(left.getLineItemOrder(), right.getLineItemOrder());
+		if (orderComparison != 0) {
+			return orderComparison;
+		}
+		int idComparison = compareIntegersAscending(left.getId(), right.getId());
+		if (idComparison != 0) {
+			return idComparison;
+		}
+		return compareStringsAscending(left.getUuid(), right.getUuid());
+	}
+
+	private List<BillLineItem> getWrappedRecipientLineItems(List<BillLineItem> lineItemsInBillOrder,
+	        int changedLineIndex) {
+		List<BillLineItem> recipientLineItems = new ArrayList<BillLineItem>();
+		for (int i = changedLineIndex + 1; i < lineItemsInBillOrder.size(); i++) {
+			recipientLineItems.add(lineItemsInBillOrder.get(i));
+		}
+		for (int i = 0; i < changedLineIndex; i++) {
+			recipientLineItems.add(lineItemsInBillOrder.get(i));
+		}
+		return recipientLineItems;
 	}
 
 	private int findLineItemIndex(List<BillLineItem> lineItems, BillLineItem changedLineItem) {
@@ -195,24 +225,43 @@ public class PaymentAllocationRebalanceServiceImpl implements PaymentAllocationR
 		return right.compareTo(left);
 	}
 
-	private void reallocateReleasedChunks(Bill bill, List<BillLineItem> lineItems, int firstRecipientIndex,
-	        List<ReleasedPaymentChunk> releasedChunks, Set<BillLineItem> affectedLineItems) {
-		reallocateReleasedChunks(bill, lineItems, firstRecipientIndex, lineItems.size(), releasedChunks,
-		    affectedLineItems);
+	private int compareIntegersAscending(Integer left, Integer right) {
+		if (left == null && right == null) {
+			return 0;
+		}
+		if (left == null) {
+			return 1;
+		}
+		if (right == null) {
+			return -1;
+		}
+		return left.compareTo(right);
 	}
 
-	private void reallocateReleasedChunks(Bill bill, List<BillLineItem> lineItems, int firstRecipientIndex,
-	        int exclusiveEndIndex, List<ReleasedPaymentChunk> releasedChunks, Set<BillLineItem> affectedLineItems) {
+	private int compareStringsAscending(String left, String right) {
+		if (left == null && right == null) {
+			return 0;
+		}
+		if (left == null) {
+			return 1;
+		}
+		if (right == null) {
+			return -1;
+		}
+		return left.compareTo(right);
+	}
+
+	private void reallocateReleasedChunks(Bill bill, List<BillLineItem> recipientLineItems,
+	        List<ReleasedPaymentChunk> releasedChunks, Set<BillLineItem> affectedLineItems) {
 		for (ReleasedPaymentChunk chunk : releasedChunks) {
 			if (chunk == null || chunk.payment == null || chunk.remainingAmount.compareTo(BigDecimal.ZERO) <= 0
 			        || !isAllocatablePayment(chunk.payment)) {
 				continue;
 			}
-			for (int i = firstRecipientIndex; i < exclusiveEndIndex; i++) {
+			for (BillLineItem recipient : recipientLineItems) {
 				if (chunk.remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
 					break;
 				}
-				BillLineItem recipient = lineItems.get(i);
 				if (!isEligibleAllocationRecipient(recipient)) {
 					continue;
 				}
