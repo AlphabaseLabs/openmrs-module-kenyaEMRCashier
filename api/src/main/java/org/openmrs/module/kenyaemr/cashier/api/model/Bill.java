@@ -439,6 +439,12 @@ public class Bill extends BaseOpenmrsData {
 	}
 
 	public void synchronizeBillStatus() {
+		BigDecimal balance = getBalance();
+		if (balance.compareTo(BigDecimal.ZERO) < 0) {
+			this.setStatus(BillStatus.CREDITED);
+			return;
+		}
+
 		if (hasActiveLineItems() && getTotal().compareTo(BigDecimal.ZERO) == 0) {
 			this.setStatus(BillStatus.PAID);
 			return;

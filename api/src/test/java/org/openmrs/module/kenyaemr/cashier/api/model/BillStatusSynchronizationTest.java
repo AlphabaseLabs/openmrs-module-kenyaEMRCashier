@@ -64,6 +64,48 @@ public class BillStatusSynchronizationTest {
 	}
 
 	@Test
+	public void synchronizeBillStatus_shouldKeepBillPendingWhenPositiveBalanceHasNoPayment() {
+		Bill bill = createBillWithLineItem(BigDecimal.valueOf(2000));
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.PENDING, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(2000)));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillPostedWhenPartiallyPaid() {
+		Bill bill = createBillWithPayment(BigDecimal.valueOf(2000), BigDecimal.valueOf(500));
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.POSTED, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(1500)));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillPaidWhenExactlyPaid() {
+		Bill bill = createBillWithPayment(BigDecimal.valueOf(2000), BigDecimal.valueOf(2000));
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.PAID, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldIgnoreVoidedPayments() {
+		Bill bill = createBillWithPayment(BigDecimal.valueOf(2000), BigDecimal.valueOf(2000));
+		bill.getPayments().iterator().next().setVoided(true);
+		bill.setStatus(BillStatus.PAID);
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.PENDING, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(2000)));
+	}
+
+	@Test
 	public void synchronizeStatuses_shouldRefreshLineItemAndBillStatusFromAllocations() {
 		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(2000), BigDecimal.ZERO);
 		lineItem.setPaymentStatus(BillStatus.PENDING);
@@ -93,6 +135,102 @@ public class BillStatusSynchronizationTest {
 		assertEquals(BillStatus.PAID, lineItem.getPaymentStatus());
 		assertEquals(BillStatus.PAID, bill.getStatus());
 		assertEquals(0, bill.getBalance().compareTo(BigDecimal.ZERO));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillCreditedWhenBalanceIsNegative() {
+		Bill bill = createBillWithPayment(BigDecimal.valueOf(2000), BigDecimal.valueOf(2150));
+		bill.setStatus(BillStatus.PAID);
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.CREDITED, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(-150)));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkZeroTotalBillCreditedWhenItHasExtraPayment() {
+		BillLineItem lineItem = createLineItemWithDiscount(BigDecimal.valueOf(2000), BigDecimal.valueOf(2000));
+		Bill bill = createBillWithLineItem(lineItem);
+
+		Payment payment = new Payment();
+		payment.setAmount(BigDecimal.valueOf(150));
+		payment.setAmountTendered(BigDecimal.valueOf(150));
+		payment.setBill(bill);
+		bill.setPayments(Collections.singleton(payment));
+		bill.setStatus(BillStatus.PAID);
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.CREDITED, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(-150)));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillCreditedWhenWaiversOverSettleBalance() {
+		Bill bill = createBillWithLineItem(BigDecimal.valueOf(2000));
+		PaymentMode waiverMode = new PaymentMode();
+		waiverMode.setName("Waiver");
+
+		Payment waiver = new Payment();
+		waiver.setInstanceType(waiverMode);
+		waiver.setAmount(BigDecimal.valueOf(2150));
+		waiver.setAmountTendered(BigDecimal.valueOf(2150));
+		waiver.setBill(bill);
+		bill.setPayments(Collections.singleton(waiver));
+		bill.setStatus(BillStatus.PAID);
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.CREDITED, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(-150)));
+	}
+
+	@Test
+	public void synchronizeBillStatus_shouldMarkBillCreditedWhenDepositsOverSettleBalance() {
+		Bill bill = createBillWithLineItemAndDeposits(BigDecimal.valueOf(2000), BigDecimal.valueOf(2150));
+		bill.setStatus(BillStatus.PAID);
+
+		bill.synchronizeBillStatus();
+
+		assertEquals(BillStatus.CREDITED, bill.getStatus());
+		assertEquals(0, bill.getBalance().compareTo(BigDecimal.valueOf(-150)));
+	}
+
+	private Bill createBillWithPayment(BigDecimal price, BigDecimal paymentAmount) {
+		Bill bill = createBillWithLineItem(price);
+
+		Payment payment = new Payment();
+		payment.setAmount(paymentAmount);
+		payment.setAmountTendered(paymentAmount);
+		payment.setBill(bill);
+		bill.setPayments(Collections.singleton(payment));
+
+		return bill;
+	}
+
+	private Bill createBillWithLineItem(BigDecimal price) {
+		return createBillWithLineItem(createLineItemWithDiscount(price, BigDecimal.ZERO));
+	}
+
+	private Bill createBillWithLineItem(BillLineItem lineItem) {
+		Bill bill = new Bill();
+		bill.setLineItems(Arrays.asList(lineItem));
+		lineItem.setBill(bill);
+		return bill;
+	}
+
+	private Bill createBillWithLineItemAndDeposits(BigDecimal price, final BigDecimal depositAmount) {
+		Bill bill = new Bill() {
+			@Override
+			public BigDecimal getTotalDeposits() {
+				return depositAmount;
+			}
+		};
+		BillLineItem lineItem = createLineItemWithDiscount(price, BigDecimal.ZERO);
+		bill.setLineItems(Arrays.asList(lineItem));
+		lineItem.setBill(bill);
+		return bill;
 	}
 
 	private BillLineItem createLineItemWithDiscount(BigDecimal price, BigDecimal discountAmount) {
