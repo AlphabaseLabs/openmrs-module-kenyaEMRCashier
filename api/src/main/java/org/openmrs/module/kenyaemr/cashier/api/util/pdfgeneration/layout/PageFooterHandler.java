@@ -1,7 +1,5 @@
 package org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.layout.Canvas;
@@ -10,11 +8,11 @@ import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.properties.TextAlignment;
 import org.apache.commons.lang.StringUtils;
+import org.openmrs.User;
 import org.openmrs.api.context.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.openmrs.module.kenyaemr.cashier.ModuleSettings;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
 
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
@@ -23,24 +21,22 @@ import java.util.Date;
  */
 public class PageFooterHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(PageFooterHandler.class);
-    private static final String GP_FACILITY_INFORMATION = "kenyaemr.cashier.receipt.facilityInformation";
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MMM-yyyy");
+    private static final String FACILITY_NAME_FALLBACK =
+            "No facility name configured, please add facility name in the global property "
+                    + "kenyaemr.cashier.receipt.facilityInformation";
+    private static final float FOOTER_BOTTOM_MARGIN = 16f;
+    private static final float FOOTER_LINE_SPACING = 2f;
 
-    // Footer positioning constants
-    private static final float FOOTER_BOTTOM_MARGIN = 20f;
-    private static final float FOOTER_HEIGHT = 60f;
-    private static final float SECTION_SPACING = 4f;
-    private static final float LINE_SPACING = 1.5f;
-
-    private FooterConfig config;
+    private final FooterConfig config;
+    private final Date generatedAt;
+    private DocumentHeader.FacilityInfo facilityInfo;
+    private String facilityName;
 
     /**
      * Constructor with default configuration
      */
     public PageFooterHandler() {
-        this.config = new FooterConfig();
+        this(new FooterConfig());
     }
 
     /**
@@ -48,7 +44,8 @@ public class PageFooterHandler {
      * @param config Custom footer configuration
      */
     public PageFooterHandler(FooterConfig config) {
-        this.config = config;
+        this.config = config != null ? config : new FooterConfig();
+        this.generatedAt = new Date();
     }
 
     /**
@@ -60,150 +57,168 @@ public class PageFooterHandler {
      */
     public void renderFooter(Canvas canvas, PdfPage page, Object data, int pageNumber) {
         String facilityName = getFacilityName();
-        String documentNumber = extractDocumentNumber(data);
-        
-        // Get page dimensions
+        String facilityTel = getFacilityTel();
+        String documentNumber = PdfGenerationUtils.extractDocumentNumber(data);
+
         Rectangle pageSize = page.getPageSize();
         float pageWidth = pageSize.getWidth();
-        float pageHeight = pageSize.getHeight();
-        
-        // Calculate footer position (bottom of page)
-        float footerY = FOOTER_BOTTOM_MARGIN;
-        float footerWidth = pageWidth - 100; // Leave margins
-        float footerX = 50; // Left margin
-        
-        // Create footer container with fixed position
-        canvas.setFixedPosition(footerX, footerY, footerWidth);
-        
-        // Top separator
+        float footerX = 24f;
+        float footerWidth = pageWidth - 48f;
+
+        canvas.setFixedPosition(footerX, FOOTER_BOTTOM_MARGIN, footerWidth);
         canvas.add(new Paragraph(" ")
-                .setBorderTop(new SolidBorder(0.5f))
-                .setMarginBottom(SECTION_SPACING));
+                .setBorderTop(new SolidBorder(PrintablePdfStyle.TEXT, 0.5f))
+                .setMarginTop(0)
+                .setMarginBottom(5f));
 
-        // Custom footer text if provided
-        if (StringUtils.isNotEmpty(config.customFooterText)) {
-            canvas.add(new Paragraph(config.customFooterText)
-                    .setFontSize(6)
-                    .setTextAlignment(TextAlignment.LEFT)
-                    .setMarginBottom(LINE_SPACING));
-        }
-
-        // Facility name and payment terms
         if (StringUtils.isNotEmpty(config.paymentTerms)) {
             canvas.add(new Paragraph()
-                    .add(new Text(facilityName).setBold().setFontSize(8))
-                    .add(new Text(" | ").setFontSize(8))
-                    .add(new Text(config.paymentTerms).setFontSize(8))
+                    .add(new Text(facilityName).setFont(CarbonPdfFonts.semibold()).setFontSize(6.5f)
+                            .setFontColor(PrintablePdfStyle.TEXT))
+                    .add(new Text(" | ").setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                            .setFontColor(PrintablePdfStyle.TEXT))
+                    .add(new Text(config.paymentTerms).setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                            .setFontColor(PrintablePdfStyle.TEXT))
                     .setTextAlignment(TextAlignment.LEFT)
-                    .setMarginBottom(LINE_SPACING));
+                    .setMarginTop(0)
+                    .setMarginBottom(FOOTER_LINE_SPACING));
         }
 
-        // Thank you message
-        if (StringUtils.isNotEmpty(config.thankYouMessage)) {
-            canvas.add(new Paragraph()
-                    .add(new Text("Thank you for choosing ").setFontSize(7))
-                    .add(new Text(facilityName).setBold().setFontSize(7))
-                    .add(new Text(" ").setFontSize(7))
-                    .add(new Text(config.thankYouMessage).setFontSize(7))
-                    .setTextAlignment(TextAlignment.LEFT)
-                    .setMarginBottom(SECTION_SPACING));
+        String thankYouMessageTemplate = getThankYouMessageTemplate();
+        if (StringUtils.isNotEmpty(thankYouMessageTemplate)) {
+            Paragraph thankYouMessage = new Paragraph()
+                    .setFontSize(7.5f)
+                    .setFontColor(PrintablePdfStyle.TEXT)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(0)
+                    .setMarginBottom(FOOTER_LINE_SPACING);
+            addFormattedThankYouMessage(thankYouMessage, thankYouMessageTemplate, facilityName, facilityTel);
+            canvas.add(thankYouMessage);
         }
 
-        // System note with page number
-        canvas.add(createSystemNote(documentNumber, pageNumber));
+        canvas.add(createSystemNote(documentNumber, pageNumber, config.customFooterText));
     }
 
-    /**
-     * Get facility name from global property or use default
-     */
-    private String getFacilityName() {
-        String facilityInfoJson = Context.getAdministrationService()
-                .getGlobalProperty(GP_FACILITY_INFORMATION);
+    private Paragraph createSystemNote(String documentNumber, int pageNumber, String customFooterText) {
+        String generatedDateTime = PdfGenerationUtils.formatSystemTimestamp(generatedAt);
+        User authenticatedUser = Context.getAuthenticatedUser();
+        String generatedBy = authenticatedUser != null && authenticatedUser.getUsername() != null
+                ? authenticatedUser.getUsername()
+                : "system";
+        String generatedByUserId = authenticatedUser != null && authenticatedUser.getId() != null
+                ? authenticatedUser.getId().toString()
+                : "N/A";
 
-        if (StringUtils.isNotEmpty(facilityInfoJson)) {
-            try {
-                JsonNode facilityInfo = objectMapper.readTree(facilityInfoJson);
-                if (facilityInfo.has("facilityName")) {
-                    return facilityInfo.get("facilityName").asText();
-                }
-            } catch (Exception e) {
-                log.warn("Failed to parse facility information for footer. Using default.", e);
-            }
+        Paragraph paragraph = new Paragraph();
+        if (StringUtils.isNotEmpty(customFooterText)) {
+            paragraph.add(new Text(normalizeFooterPrefix(customFooterText) + " | ").setFont(CarbonPdfFonts.regular())
+                    .setFontSize(6.5f).setFontColor(PrintablePdfStyle.TEXT));
         }
 
-        return "No facility name configured, please add facility name in the global property kenyaemr.cashier.receipt.facilityInformation";
-    }
-
-    /**
-     * Extract document number from data object
-     */
-    private String extractDocumentNumber(Object data) {
-        if (data == null) {
-            return "N/A";
-        }
-
-        try {
-            // Try to extract from Bill object
-            if (data instanceof org.openmrs.module.kenyaemr.cashier.api.model.Bill) {
-                org.openmrs.module.kenyaemr.cashier.api.model.Bill bill = 
-                    (org.openmrs.module.kenyaemr.cashier.api.model.Bill) data;
-                return bill.getReceiptNumber() != null ? bill.getReceiptNumber() : "N/A";
-            }
-
-            // Try to extract from Map
-            if (data instanceof java.util.Map) {
-                java.util.Map<String, Object> map = (java.util.Map<String, Object>) data;
-                Object docNumber = map.get("documentNumber");
-                if (docNumber != null) {
-                    return docNumber.toString();
-                }
-                Object receiptNumber = map.get("receiptNumber");
-                if (receiptNumber != null) {
-                    return receiptNumber.toString();
-                }
-            }
-
-            // Try to extract from JSON
-            if (data instanceof JsonNode) {
-                JsonNode jsonData = (JsonNode) data;
-                if (jsonData.has("documentNumber")) {
-                    return jsonData.get("documentNumber").asText();
-                }
-                if (jsonData.has("receiptNumber")) {
-                    return jsonData.get("receiptNumber").asText();
-                }
-            }
-
-        } catch (Exception e) {
-            log.warn("Failed to extract document number from data", e);
-        }
-
-        return "N/A";
-    }
-
-    /**
-     * Create system-generated note with page number
-     */
-    private Paragraph createSystemNote(String documentNumber, int pageNumber) {
-        String generatedDateTime = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss").format(new Date());
-        String generatedBy = Context.getAuthenticatedUser() != null && 
-                Context.getAuthenticatedUser().getUsername() != null ? 
-                Context.getAuthenticatedUser().getUsername() : "system";
-        String generatedByUserId = Context.getAuthenticatedUser() != null && 
-                Context.getAuthenticatedUser().getId() != null ? 
-                Context.getAuthenticatedUser().getId().toString() : "N/A";
-
-        return new Paragraph()
-                .add(new Text("Computer-generated document. DOC NO: ").setFontSize(6))
-                .add(new Text(documentNumber).setBold().setFontSize(6))
-                .add(new Text(" | ").setFontSize(6))
-                .add(new Text(generatedDateTime).setFontSize(6))
-                .add(new Text(" | ").setFontSize(6))
-                .add(new Text(generatedBy + " (" + generatedByUserId + ")").setItalic().setFontSize(6))
-                .add(new Text(" | Page ").setFontSize(6))
-                .add(new Text(String.valueOf(pageNumber)).setBold().setFontSize(6))
+        return paragraph
+                .add(new Text("DOC NO: ").setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(documentNumber).setFont(CarbonPdfFonts.semibold()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(" | ").setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(generatedDateTime).setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(" | ").setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(generatedBy + " (" + generatedByUserId + ")").setFont(CarbonPdfFonts.regular())
+                        .setFontSize(6.5f).setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(" | Page ").setFont(CarbonPdfFonts.regular()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
+                .add(new Text(String.valueOf(pageNumber)).setFont(CarbonPdfFonts.semibold()).setFontSize(6.5f)
+                        .setFontColor(PrintablePdfStyle.TEXT))
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(LINE_SPACING);
+                .setMarginTop(0)
+                .setMarginBottom(0);
+    }
+
+    private String normalizeFooterPrefix(String customFooterText) {
+        return customFooterText.trim().replaceAll("[\\s.,]+$", "");
+    }
+
+    private String getFacilityName() {
+        if (facilityName == null) {
+            DocumentHeader.FacilityInfo info = getFacilityInfo();
+            facilityName = StringUtils.isNotEmpty(info.facilityName) ? info.facilityName : FACILITY_NAME_FALLBACK;
+        }
+        return facilityName;
+    }
+
+    private String getFacilityTel() {
+        DocumentHeader.FacilityInfo info = getFacilityInfo();
+        return info.contacts != null && StringUtils.isNotEmpty(info.contacts.tel) ? info.contacts.tel : "";
+    }
+
+    private DocumentHeader.FacilityInfo getFacilityInfo() {
+        if (facilityInfo == null) {
+            facilityInfo = DocumentHeader.getConfiguredFacilityInfo();
+        }
+        return facilityInfo;
+    }
+
+    private String getThankYouMessageTemplate() {
+        return StringUtils.isNotEmpty(config.thankYouMessage)
+                ? config.thankYouMessage
+                : ModuleSettings.getPdfFooterThankYouMessage();
+    }
+
+    static String formatThankYouMessage(String template, String facilityName, String facilityTel) {
+        if (StringUtils.isEmpty(template)) {
+            return "";
+        }
+
+        return template
+                .replace("{facilityName}", StringUtils.defaultString(facilityName))
+                .replace("{facilityTel}", StringUtils.defaultString(facilityTel));
+    }
+
+    static void addFormattedThankYouMessage(Paragraph paragraph, String template, String facilityName,
+            String facilityTel) {
+        int index = 0;
+        while (index < template.length()) {
+            int facilityNameIndex = template.indexOf("{facilityName}", index);
+            int facilityTelIndex = template.indexOf("{facilityTel}", index);
+            int nextIndex = nextPlaceholderIndex(facilityNameIndex, facilityTelIndex);
+
+            if (nextIndex < 0) {
+                paragraph.add(footerText(template.substring(index), false));
+                return;
+            }
+
+            if (nextIndex > index) {
+                paragraph.add(footerText(template.substring(index, nextIndex), false));
+            }
+
+            if (nextIndex == facilityNameIndex) {
+                paragraph.add(footerText(StringUtils.defaultString(facilityName), true));
+                index = facilityNameIndex + "{facilityName}".length();
+            } else {
+                paragraph.add(footerText(StringUtils.defaultString(facilityTel), true));
+                index = facilityTelIndex + "{facilityTel}".length();
+            }
+        }
+    }
+
+    private static int nextPlaceholderIndex(int facilityNameIndex, int facilityTelIndex) {
+        if (facilityNameIndex < 0) {
+            return facilityTelIndex;
+        }
+        if (facilityTelIndex < 0) {
+            return facilityNameIndex;
+        }
+        return Math.min(facilityNameIndex, facilityTelIndex);
+    }
+
+    private static Text footerText(String text, boolean emphasized) {
+        return new Text(text)
+                .setFont(emphasized ? CarbonPdfFonts.semibold() : CarbonPdfFonts.regular())
+                .setFontSize(7.5f)
+                .setFontColor(PrintablePdfStyle.TEXT);
     }
 
     /**
@@ -237,4 +252,4 @@ public class PageFooterHandler {
             return this;
         }
     }
-} 
+}

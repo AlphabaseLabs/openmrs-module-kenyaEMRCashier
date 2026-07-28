@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>org.openmrs.module</groupId>
 		<artifactId>kenyaemr.cashier</artifactId>
-			<version>4.3.8</version>
+			<version>4.3.9</version>
 	</parent>
 
 	<artifactId>kenyaemr.cashier-api</artifactId>
@@ -20,13 +20,8 @@
 			<artifactId>stockmanagement-api</artifactId>
 		</dependency>
 
-		<!-- These two dependencies need to be higher in the order to ensure that the correct (newer) version of
+		<!-- This dependency needs to be higher in the order to ensure that the correct (newer) version of
 		javassit is used -->
-		<dependency>
-			<groupId>org.powermock</groupId>
-			<artifactId>powermock-module-junit4-rule-agent</artifactId>
-			<scope>test</scope>
-		</dependency>
 		<dependency>
 			<groupId>org.javassist</groupId>
 			<artifactId>javassist</artifactId>
@@ -130,6 +125,16 @@
 			<resource>
 				<directory>src/main/resources</directory>
 				<filtering>true</filtering>
+				<excludes>
+					<exclude>fonts/**</exclude>
+				</excludes>
+			</resource>
+			<resource>
+				<directory>src/main/resources</directory>
+				<filtering>false</filtering>
+				<includes>
+					<include>fonts/**</include>
+				</includes>
 			</resource>
 		</resources>
 

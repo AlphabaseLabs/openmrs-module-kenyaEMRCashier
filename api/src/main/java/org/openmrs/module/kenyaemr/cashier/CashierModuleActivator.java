@@ -77,6 +77,10 @@ public class CashierModuleActivator extends BaseModuleActivator {
 		        ModuleSettings.DEFAULT_AUTO_CLOSE_PAID_BILLS_REASON);
 		ensureGlobalProperty(ModuleSettings.AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS_PROPERTY,
 		        ModuleSettings.DEFAULT_AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS.toString());
+		ensureGlobalProperty(ModuleSettings.PDF_PAID_STAMP_ENABLED_PROPERTY,
+		        ModuleSettings.DEFAULT_PDF_PAID_STAMP_ENABLED.toString());
+		ensureGlobalProperty(ModuleSettings.PDF_FOOTER_THANK_YOU_MESSAGE_PROPERTY,
+		        ModuleSettings.DEFAULT_PDF_FOOTER_THANK_YOU_MESSAGE);
 
 		SchedulerService schedulerService = Context.getSchedulerService();
 		TaskDefinition task = schedulerService.getTaskByName(AUTO_CLOSE_PAID_BILLS_TASK_NAME);

@@ -1,233 +1,135 @@
 package org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.billstatement;
 
 import com.itextpdf.layout.Document;
-import com.itextpdf.layout.borders.SolidBorder;
-import com.itextpdf.layout.element.Cell;
-import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
+import org.openmrs.User;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
-import org.openmrs.module.kenyaemr.cashier.api.util.CurrencyUtil;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.PrintablePdfStyle;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Bill statement content section that includes:
- * - Patient information at the top
- * - Detailed bill items with timestamps
- * - Complete payment history
- * - Bill summary following accounting standards
- */
 public class BillStatementContentSection implements PdfDocumentService.ContentSection {
 
-    private static final DecimalFormat CURRENCY_FORMAT = new DecimalFormat("#,##0.00");
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
-    private static final SimpleDateFormat SHORT_DATE_FORMAT = new SimpleDateFormat("dd-MMM-yyyy HH:mm");
-
-    // Design constants
     private static final float TABLE_MARGIN = 8f;
-    private static final float SECTION_SPACING = 12f;
-    private static final float SUBSECTION_SPACING = 6f;
+    private static final float SECTION_SPACING = 10f;
 
     @Override
     public void render(Document doc, Object data) {
-        if (data == null) {
-            throw new IllegalArgumentException("Bill data cannot be null. Please provide a valid Bill object.");
-        }
+        Bill bill = PdfGenerationUtils.requireBill(data);
+        PdfGenerationUtils.requirePatient(bill);
+        PdfGenerationUtils.requireLineItems(bill);
+        PdfGenerationUtils.CurrencyFormatter currency = new PdfGenerationUtils.CurrencyFormatter();
 
-        if (!(data instanceof Bill)) {
-            throw new IllegalArgumentException(
-                    "Data must be a Bill object. Received: " + data.getClass().getSimpleName());
-        }
-
-        Bill bill = (Bill) data;
-
-        // Validate bill has required data
-        if (bill.getPatient() == null) {
-            throw new IllegalArgumentException("Bill must have an associated patient. Bill ID: " + bill.getId());
-        }
-
-        if (bill.getLineItems() == null || bill.getLineItems().isEmpty()) {
-            throw new IllegalArgumentException("Bill must have at least one line item. Bill ID: " + bill.getId());
-        }
-
-        try {
-
-            // 1. Detailed Bill Items Table
-            createDetailedBillItemsTable(doc, bill);
-
-            // 2. Payment History Table
-            createPaymentHistoryTable(doc, bill);
-
-            // 3. Bill Summary
-            createBillSummary(doc, bill);
-        } catch (Exception e) {
-            throw new RuntimeException("Error rendering bill statement content: " + e.getMessage(), e);
-        }
+        createDetailedBillItemsTable(doc, bill, currency);
+        createPaymentHistoryTable(doc, bill, currency);
+        createBillSummary(doc, bill, currency);
     }
 
-    /**
-     * Create detailed bill items table with timestamps
-     */
-    private void createDetailedBillItemsTable(Document doc, Bill bill) {
-        doc.add(new Paragraph("Detailed list of services/items provided")
-                .setBold()
-                .setFontSize(10)
-                .setTextAlignment(TextAlignment.LEFT)
-                .setMarginBottom(SUBSECTION_SPACING));
+    private void createDetailedBillItemsTable(Document doc, Bill bill,
+            PdfGenerationUtils.CurrencyFormatter currency) {
+        doc.add(PrintablePdfStyle.sectionHeading("Detailed list of services/items provided"));
 
-        // Optimized column widths for detailed information (normalized to percentages)
-        float[] itemColWidths = { 4f, 30f, 7f, 11f, 11f, 11f, 11f, 14f }; // Total: 99
+        boolean showDiscount = PdfGenerationUtils.isPositive(bill.getTotalDiscount());
+        boolean showTax = PdfGenerationUtils.isPositive(bill.getTotalTax());
+        float[] itemColWidths = getStatementItemColumnWidths(showDiscount, showTax);
         Table itemsTable = new Table(UnitValue.createPercentArray(itemColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN)
                 .setKeepTogether(false);
 
-        // Table headers
-        itemsTable.addHeaderCell(createHeaderCell("No"));
-        itemsTable.addHeaderCell(createHeaderCell("Service/Item Description", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Qty"));
-        itemsTable.addHeaderCell(createHeaderCell("Unit Price", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Discount", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Tax", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Total", TextAlignment.LEFT));
-        itemsTable.addHeaderCell(createHeaderCell("Date Added", TextAlignment.CENTER));
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("No", TextAlignment.CENTER));
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Service/Item description"));
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Qty", TextAlignment.CENTER));
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Unit price"));
+        if (showDiscount) {
+            itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Discount"));
+        }
+        if (showTax) {
+            itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Tax"));
+        }
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Total"));
+        itemsTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Date added", TextAlignment.CENTER));
 
-        // Add bill line items in chronological order
         int itemNumber = 1;
-        List<BillLineItem> lineItems = bill.getLineItems();
-        if (lineItems != null) {
-            // Sort line items chronologically by dateCreated
-            lineItems.sort((item1, item2) -> {
-                Date date1 = item1.getDateCreated();
-                Date date2 = item2.getDateCreated();
-
-                // Handle null dates - put them at the end
-                if (date1 == null && date2 == null)
-                    return 0;
-                if (date1 == null)
-                    return 1;
-                if (date2 == null)
-                    return -1;
-
-                return date1.compareTo(date2);
-            });
-
-            for (BillLineItem item : lineItems) {
-                if (item != null && !item.getVoided()) {
-                    itemsTable.addCell(createCenterCell(String.valueOf(itemNumber++)));
-                    itemsTable.addCell(createLeftCell(getItemDescription(item)));
-                    itemsTable.addCell(createCenterCell(String.valueOf(item.getQuantity())));
-                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getPrice())));
-                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalDiscount())));
-                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getTotalTax())));
-                    itemsTable.addCell(createLeftCell(CurrencyUtil.formatCurrency(item.getNetTotal())));
-
-                    // Date added with time
-                    String dateAdded = item.getDateCreated() != null ? SHORT_DATE_FORMAT.format(item.getDateCreated())
-                            : "N/A";
-                    itemsTable.addCell(createCenterCell(dateAdded));
-                }
+        for (BillLineItem item : PdfGenerationUtils.getActiveLineItemsChronologically(bill)) {
+            itemsTable.addCell(PrintablePdfStyle.tableCell(String.valueOf(itemNumber++), TextAlignment.CENTER));
+            itemsTable.addCell(PrintablePdfStyle.tableCell(PdfGenerationUtils.getItemDescription(item)));
+            itemsTable.addCell(
+                    PrintablePdfStyle.tableCell(PdfGenerationUtils.formatQuantity(item.getQuantity()),
+                            TextAlignment.CENTER));
+            itemsTable.addCell(PrintablePdfStyle.tableCell(currency.formatAmount(item.getPrice())));
+            if (showDiscount) {
+                itemsTable.addCell(PrintablePdfStyle.tableCell(currency.formatAmount(item.getTotalDiscount())));
             }
+            if (showTax) {
+                itemsTable.addCell(PrintablePdfStyle.tableCell(currency.formatAmount(item.getTotalTax())));
+            }
+            itemsTable.addCell(PrintablePdfStyle.tableCell(currency.formatAmount(item.getNetTotal())));
+            itemsTable.addCell(
+                    PrintablePdfStyle.tableCell(PdfGenerationUtils.formatLineItemDate(item.getDateCreated()),
+                            TextAlignment.CENTER));
         }
 
         doc.add(itemsTable);
     }
 
-    /**
-     * Create payment history table
-     */
-    private void createPaymentHistoryTable(Document doc, Bill bill) {
-        doc.add(new Paragraph("Payment history")
-                .setBold()
-                .setFontSize(10)
-                .setTextAlignment(TextAlignment.LEFT)
-                .setMarginBottom(SUBSECTION_SPACING));
+    private void createPaymentHistoryTable(Document doc, Bill bill,
+            PdfGenerationUtils.CurrencyFormatter currency) {
+        doc.add(PrintablePdfStyle.sectionHeading("Payment history"));
 
-        Set<Payment> payments = bill.getPayments();
-        if (payments == null || payments.isEmpty()) {
-            doc.add(new Paragraph("No payments recorded for this bill.")
-                    .setItalic()
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginBottom(SECTION_SPACING));
+        List<Payment> payments = PdfGenerationUtils.getActivePaymentsChronologically(bill);
+        if (payments.isEmpty()) {
+            doc.add(PrintablePdfStyle.emptyState("No payments recorded for this bill.", SECTION_SPACING));
             return;
         }
 
-        // Payment table - ensure columns span full width (normalized to percentages)
-        float[] paymentColWidths = { 6f, 16f, 16f, 16f, 16f, 16f, 13f }; // Total: 99
+        float[] paymentColWidths = { 6f, 16f, 16f, 16f, 16f, 16f, 13f };
         Table paymentTable = new Table(UnitValue.createPercentArray(paymentColWidths))
                 .useAllAvailableWidth()
                 .setMarginBottom(TABLE_MARGIN);
 
-        // Table headers
-        paymentTable.addHeaderCell(createHeaderCell("No"));
-        paymentTable.addHeaderCell(createHeaderCell("Date", TextAlignment.CENTER));
-        paymentTable.addHeaderCell(createHeaderCell("Method", TextAlignment.CENTER));
-        paymentTable.addHeaderCell(createHeaderCell("Tendered", TextAlignment.RIGHT));
-        paymentTable.addHeaderCell(createHeaderCell("Applied", TextAlignment.RIGHT));
-        paymentTable.addHeaderCell(createHeaderCell("Cashier", TextAlignment.CENTER));
-        paymentTable.addHeaderCell(createHeaderCell("Reference", TextAlignment.CENTER));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("No", TextAlignment.CENTER));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Date", TextAlignment.CENTER));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Method", TextAlignment.CENTER));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Tendered", TextAlignment.RIGHT));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Applied", TextAlignment.RIGHT));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Cashier", TextAlignment.CENTER));
+        paymentTable.addHeaderCell(PrintablePdfStyle.tableHeaderCell("Reference", TextAlignment.CENTER));
 
-        // Add payment records
         int paymentNumber = 1;
         for (Payment payment : payments) {
-            if (payment != null && !payment.getVoided()) {
-                paymentTable.addCell(createCenterCell(String.valueOf(paymentNumber++)));
-
-                // Payment date
-                String paymentDate = payment.getDateCreated() != null ? DATE_FORMAT.format(payment.getDateCreated())
-                        : "N/A";
-                paymentTable.addCell(createCenterCell(paymentDate));
-
-                // Payment method
-                String paymentMethod = getPaymentMethod(payment);
-                paymentTable.addCell(createCenterCell(paymentMethod));
-
-                // Amount tendered
-                paymentTable.addCell(createRightCell(CurrencyUtil.formatCurrency(payment.getAmountTendered())));
-
-                // Amount applied
-                paymentTable.addCell(createRightCell(CurrencyUtil.formatCurrency(payment.getAmount())));
-
-                String cashier = getCashierDisplay(payment);
-                paymentTable.addCell(createCenterCell(cashier));
-
-                // Reference number
-                String reference = getPaymentReference(payment);
-                paymentTable.addCell(createCenterCell(reference));
-            }
+            paymentTable.addCell(PrintablePdfStyle.tableCell(String.valueOf(paymentNumber++), TextAlignment.CENTER));
+            paymentTable.addCell(
+                    PrintablePdfStyle.tableCell(PdfGenerationUtils.formatTimestamp(payment.getDateCreated()),
+                            TextAlignment.CENTER));
+            paymentTable.addCell(
+                    PrintablePdfStyle.tableCell(PdfGenerationUtils.getPaymentMethod(payment), TextAlignment.CENTER));
+            paymentTable.addCell(
+                    PrintablePdfStyle.tableCell(currency.formatCurrency(payment.getAmountTendered()),
+                            TextAlignment.RIGHT));
+            paymentTable.addCell(
+                    PrintablePdfStyle.tableCell(currency.formatCurrency(payment.getAmount()),
+                            TextAlignment.RIGHT));
+            paymentTable.addCell(PrintablePdfStyle.tableCell(getCashierDisplay(payment), TextAlignment.CENTER));
+            paymentTable.addCell(PrintablePdfStyle.tableCell(getPaymentReference(payment), TextAlignment.CENTER));
         }
 
         doc.add(paymentTable);
     }
 
-    /**
-     * Create bill summary with accounting standards
-     */
-    private void createBillSummary(Document doc, Bill bill) {
-        doc.add(new Paragraph("Bill Summary")
-                .setBold()
-                .setFontSize(12)
-                .setTextAlignment(TextAlignment.LEFT)
-                .setMarginBottom(SUBSECTION_SPACING));
+    private void createBillSummary(Document doc, Bill bill, PdfGenerationUtils.CurrencyFormatter currency) {
+        doc.add(PrintablePdfStyle.sectionHeading("Bill summary"));
 
-        // Summary table with formatting (normalized to percentages)
-        float[] summaryColWidths = { 60f, 40f }; // Total: 100
-        Table summaryTable = new Table(UnitValue.createPercentArray(summaryColWidths))
-                .useAllAvailableWidth()
-                .setMarginBottom(TABLE_MARGIN);
-
-        // Calculate totals
+        Table summaryTable = PrintablePdfStyle.compactSummaryTable(TABLE_MARGIN);
         BigDecimal subtotalAmount = bill.getSubTotal();
         BigDecimal totalDiscount = bill.getTotalDiscount();
         BigDecimal totalTax = bill.getTotalTax();
@@ -236,128 +138,51 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         BigDecimal totalWaivers = bill.getTotalWaivers();
         BigDecimal balanceDue = bill.getBalance();
 
-        // Summary rows
-        summaryTable.addCell(createSummaryLabelCell("Subtotal:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(subtotalAmount)));
+        PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Subtotal:",
+                currency.formatCurrency(subtotalAmount), false);
 
-        summaryTable.addCell(createSummaryLabelCell("Total Discount:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalDiscount)));
-
-        summaryTable.addCell(createSummaryLabelCell("Total Tax:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalTax)));
-
-        summaryTable.addCell(createSummaryLabelCell("Total Bill Amount:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalBillAmount)));
-
-        summaryTable.addCell(createSummaryLabelCell("Total Paid:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalActualPayments)));
-
-        // Only show waived amount if it's greater than zero
-        if (totalWaivers.compareTo(BigDecimal.ZERO) > 0) {
-            summaryTable.addCell(createSummaryLabelCell("Total Waived:"));
-            summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(totalWaivers)));
+        if (PdfGenerationUtils.isPositive(totalDiscount)) {
+            PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Discount:",
+                    "- " + currency.formatCurrency(totalDiscount), false);
         }
 
-        summaryTable.addCell(createSummaryLabelCell("Balance Due:"));
-        summaryTable.addCell(createSummaryValueCell(CurrencyUtil.formatCurrency(balanceDue)));
+        if (PdfGenerationUtils.isPositive(totalTax)) {
+            PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Tax:",
+                    currency.formatCurrency(totalTax), false);
+        }
+
+        PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Total bill amount:",
+                currency.formatCurrency(totalBillAmount), true);
+        PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Total paid:",
+                currency.formatCurrency(totalActualPayments), true, 4f);
+
+        if (PdfGenerationUtils.isPositive(totalWaivers)) {
+            PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Total waived:",
+                    currency.formatCurrency(totalWaivers), false);
+        }
+
+        PrintablePdfStyle.addCompactSummaryRow(summaryTable, "Balance due:",
+                currency.formatCurrency(balanceDue), true);
 
         doc.add(summaryTable);
     }
 
-    // Utility methods for cell creation
-
-    private Cell createHeaderCell(String text) {
-        return createHeaderCell(text, TextAlignment.CENTER);
-    }
-
-    private Cell createHeaderCell(String text, TextAlignment alignment) {
-        return new Cell()
-                .add(new Paragraph(text).setBold().setFontSize(9))
-                .setTextAlignment(alignment)
-                .setBorderBottom(new SolidBorder(1f))
-                .setBorderTop(new SolidBorder(1f))
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(2f);
-    }
-
-    private Cell createCenterCell(String text) {
-        return new Cell()
-                .add(new Paragraph(text != null ? text : "").setFontSize(8))
-                .setTextAlignment(TextAlignment.CENTER)
-                .setBorderTop(null)
-                .setBorderBottom(null)
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(2f);
-    }
-
-    private Cell createLeftCell(String text) {
-        return new Cell()
-                .add(new Paragraph(text != null ? text : "").setFontSize(8))
-                .setTextAlignment(TextAlignment.LEFT)
-                .setBorderTop(null)
-                .setBorderBottom(null)
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(2f);
-    }
-
-    private Cell createRightCell(String text) {
-        return new Cell()
-                .add(new Paragraph(text != null ? text : "").setFontSize(8))
-                .setTextAlignment(TextAlignment.RIGHT)
-                .setBorderTop(null)
-                .setBorderBottom(null)
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(2f);
-    }
-
-    private Cell createSummaryLabelCell(String text) {
-        return new Cell()
-                .add(new Paragraph(text).setBold().setFontSize(10))
-                .setTextAlignment(TextAlignment.LEFT)
-                .setBorderTop(new SolidBorder(1f))
-                .setBorderBottom(new SolidBorder(1f))
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(4f);
-    }
-
-    private Cell createSummaryValueCell(String text) {
-        return new Cell()
-                .add(new Paragraph(text != null ? text : "").setBold().setFontSize(10))
-                .setTextAlignment(TextAlignment.RIGHT)
-                .setBorderTop(new SolidBorder(1f))
-                .setBorderBottom(new SolidBorder(1f))
-                .setBorderLeft(null)
-                .setBorderRight(null)
-                .setPadding(4f);
-    }
-
-    // Helper methods
-
-    private String getItemDescription(BillLineItem item) {
-        if (item.getItem() != null && item.getItem().getCommonName() != null) {
-            return item.getItem().getCommonName();
-        } else if (item.getBillableService() != null && item.getBillableService().getName() != null) {
-            return item.getBillableService().getName();
+    private float[] getStatementItemColumnWidths(boolean showDiscount, boolean showTax) {
+        if (showDiscount && showTax) {
+            return new float[] { 4f, 30f, 7f, 11f, 10f, 9f, 11f, 17f };
         }
-        return "Service/Item";
-    }
-
-    private String getPaymentMethod(Payment payment) {
-        if (payment.getInstanceType() != null) {
-            return payment.getInstanceType().getName();
+        if (showDiscount) {
+            return new float[] { 4f, 34f, 7f, 13f, 11f, 13f, 18f };
         }
-        return "Cash";
+        if (showTax) {
+            return new float[] { 4f, 34f, 7f, 13f, 10f, 14f, 18f };
+        }
+        return new float[] { 4f, 40f, 8f, 15f, 15f, 18f };
     }
 
     private String getPaymentReference(Payment payment) {
         Set<PaymentAttribute> attributes = payment.getAttributes();
         if (attributes != null && !attributes.isEmpty()) {
-            // Just grab the first attribute value (value_reference column)
             for (PaymentAttribute attr : attributes) {
                 if (attr != null && attr.getValue() != null) {
                     String value = attr.getValue().trim();
@@ -370,31 +195,20 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         return "-";
     }
 
-    /**
-     * Get cashier display name without null values
-     */
     private String getCashierDisplay(Payment payment) {
         if (payment == null || payment.getCreator() == null) {
             return "N/A";
         }
 
-        org.openmrs.User user = payment.getCreator();
+        User user = payment.getCreator();
 
-        // Try to get person name first
         if (user.getPerson() != null && user.getPerson().getPersonName() != null) {
-            String givenName = user.getPerson().getPersonName().getGivenName();
-            String familyName = user.getPerson().getPersonName().getFamilyName();
-
-            if (givenName != null && familyName != null) {
-                return givenName + " " + familyName;
-            } else if (givenName != null) {
-                return givenName;
-            } else if (familyName != null) {
-                return familyName;
+            String fullName = user.getPerson().getPersonName().getFullName();
+            if (fullName != null && !fullName.trim().isEmpty()) {
+                return fullName;
             }
         }
 
-        // Fallback to username or system id
         if (user.getUsername() != null && !user.getUsername().isEmpty()) {
             return user.getUsername();
         }
@@ -403,7 +217,6 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
             return user.getSystemId();
         }
 
-        // Last resort - use user ID
         if (user.getId() != null) {
             return "User #" + user.getId();
         }

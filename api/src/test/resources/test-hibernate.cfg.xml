@@ -11,10 +11,40 @@
 		<property name="use_sql_comments">true</property>
 		-->
 
-		<mapping resource="InvDepartment.hbm.xml" />
-		<mapping resource="InvItem.hbm.xml" />
 		<mapping resource="Bill.hbm.xml" />
 		<mapping resource="Cashier.hbm.xml" />
 		<mapping resource="SequentialReceiptNumberGenerator.hbm.xml" />
+
+		<mapping class="org.openmrs.Allergy" />
+		<mapping class="org.openmrs.Condition" />
+		<mapping class="org.openmrs.ConceptMapType" />
+		<mapping class="org.openmrs.Diagnosis" />
+		<mapping class="org.openmrs.Encounter" />
+		<mapping class="org.openmrs.MedicationDispense" />
+		<mapping class="org.openmrs.ProviderAttributeType" />
+		<mapping class="org.openmrs.Visit" />
+		<mapping class="org.openmrs.VisitAttributeType" />
+
+		<mapping class="org.openmrs.module.stockmanagement.api.model.BatchJob" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.BatchJobOwner" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.LocationTree" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.OrderItem" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.Party" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.ReservedTransaction" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockBatch" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockItem" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockItemPackagingUOM" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockItemReference" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockItemTransaction" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockOperation" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockOperationItem" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockOperationLink" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockOperationType" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockOperationTypeLocationScope" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockRule" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.StockSource" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.UserRoleScope" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.UserRoleScopeLocation" />
+		<mapping class="org.openmrs.module.stockmanagement.api.model.UserRoleScopeOperationType" />
 	</session-factory>
 </hibernate-configuration>

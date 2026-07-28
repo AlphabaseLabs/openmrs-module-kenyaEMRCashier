@@ -1,242 +1,68 @@
 package org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.invoice;
 
 import com.itextpdf.layout.Document;
-import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.borders.SolidBorder;
+import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Table;
-import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
-import com.itextpdf.layout.properties.VerticalAlignment;
+import org.openmrs.Patient;
+import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.DocumentHeader;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.PrintablePdfStyle;
 
-public class InvoiceLetterheadSection
-        implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.LetterheadSection {
+public class InvoiceLetterheadSection implements PdfDocumentService.LetterheadSection {
 
-    public static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
+    private static final float DETAIL_SECTION_BOTTOM_MARGIN = 20f;
 
-    // Design constants
-    private static final float HEADER_SPACING = 8f;
-    private static final float CONTENT_SPACING = 4f;
-
-    private final DocumentHeader documentHeader;
-
-    public InvoiceLetterheadSection() {
-        this.documentHeader = new DocumentHeader();
-    }
+    private final DocumentHeader documentHeader = new DocumentHeader();
 
     @Override
     public void render(Document doc, Object data) {
+        Bill bill = PdfGenerationUtils.requireBill(data);
+        PdfGenerationUtils.requirePatient(bill);
+
         documentHeader.setTitle("Invoice").render(doc);
-        createInvoiceHeader(doc, data);
+        addInvoiceDetails(doc, bill);
     }
 
-    /**
-     * Create invoice-specific header content (patient info, invoice summary, etc.)
-     */
-    private void createInvoiceHeader(Document doc, Object data) {
-        InvoiceData invoiceData = extractInvoiceData(data);
+    private void addInvoiceDetails(Document doc, Bill bill) {
+        PdfGenerationUtils.CurrencyFormatter currency = new PdfGenerationUtils.CurrencyFormatter();
+        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 66f, 34f }))
+                .useAllAvailableWidth()
+                .setBorderBottom(new SolidBorder(PrintablePdfStyle.BORDER, 0.5f))
+                .setMarginTop(0)
+                .setMarginBottom(DETAIL_SECTION_BOTTOM_MARGIN);
 
-        // Create a table for patient info and invoice summary (normalized to percentages)
-        Table headerTable = new Table(UnitValue.createPercentArray(new float[] { 37f, 63f })) // Total: 100
-                .setWidth(UnitValue.createPercentValue(100))
-                .setMarginTop(CONTENT_SPACING)
-                .setMarginBottom(HEADER_SPACING);
-
-        // Add patient information cell
-        headerTable.addCell(createPatientInfoCell(invoiceData).setTextAlignment(TextAlignment.LEFT));
-
-        // Add invoice summary cell
-        headerTable.addCell(createInvoiceSummaryCell(invoiceData).setTextAlignment(TextAlignment.RIGHT));
-
-
+        headerTable.addCell(createPatientInfoCell(bill.getPatient()));
+        headerTable.addCell(createInvoiceSummaryCell(bill, currency));
         doc.add(headerTable);
     }
 
-    /**
-     * Extract invoice data from various data types
-     */
-    private InvoiceData extractInvoiceData(Object data) {
-        InvoiceData invoiceData = new InvoiceData();
-
-        if (data instanceof org.openmrs.module.kenyaemr.cashier.api.model.Bill) {
-            populateFromBill(invoiceData, (org.openmrs.module.kenyaemr.cashier.api.model.Bill) data);
-        } else if (data instanceof java.util.Map) {
-            populateFromMap(invoiceData, (java.util.Map<String, Object>) data);
-        } else if (data instanceof com.fasterxml.jackson.databind.JsonNode) {
-            populateFromJson(invoiceData, (com.fasterxml.jackson.databind.JsonNode) data);
-        }
-
-        return invoiceData;
-    }
-
-    /**
-     * Populate invoice data from Bill object
-     */
-    private void populateFromBill(InvoiceData invoiceData, org.openmrs.module.kenyaemr.cashier.api.model.Bill bill) {
-        if (bill == null)
-            return;
-
-        // Patient information
-        if (bill.getPatient() != null) {
-            invoiceData.patientIdentifier = bill.getPatient().getPatientIdentifier() != null
-                    ? bill.getPatient().getPatientIdentifier().getIdentifier()
-                    : "";
-            invoiceData.patientName = bill.getPatient().getPersonName() != null
-                    ? bill.getPatient().getPersonName().getFullName()
-                    : "";
-
-            // Calculate age
-            if (bill.getPatient().getAge() != null) {
-                invoiceData.age = String.valueOf(bill.getPatient().getAge());
-            }
-
-            invoiceData.gender = bill.getPatient().getGender() != null ? bill.getPatient().getGender() : "";
-        }
-
-        // Invoice information
-        invoiceData.invoiceNumber = bill.getReceiptNumber() != null ? bill.getReceiptNumber() : "";
-        invoiceData.dateTime = bill.getDateCreated() != null
-                ? new java.text.SimpleDateFormat("dd-MMM-yyyy HH:mm").format(bill.getDateCreated())
-                : "";
-        invoiceData.totalAmount = bill.getTotal() != null ? String.format("%.2f", bill.getTotal()) : "0.00";
-        // Use actual payments only (excluding waivers)
-        invoiceData.totalPaid = bill.getTotalActualPayments() != null ? String.format("%.2f", bill.getTotalActualPayments())
-                : "0.00";
-        invoiceData.totalWaived = bill.getTotalWaivers() != null ? String.format("%.2f", bill.getTotalWaivers())
-                : "0.00";
-        if (bill.getTotal() != null) {
-            invoiceData.balance = String.format("%.2f", bill.getBalance());
-        } else {
-            invoiceData.balance = "0.00";
-        }
-        invoiceData.status = bill.getStatus() != null ? bill.getStatus().toString() : "";
-    }
-
-    /**
-     * Populate invoice data from Map
-     */
-    private void populateFromMap(InvoiceData invoiceData, java.util.Map<String, Object> dataMap) {
-        invoiceData.patientIdentifier = getMapValue(dataMap, "patientIdentifier", "");
-        invoiceData.patientName = getMapValue(dataMap, "patientName", "");
-        invoiceData.age = getMapValue(dataMap, "age", "");
-        invoiceData.gender = getMapValue(dataMap, "gender", "");
-        invoiceData.county = getMapValue(dataMap, "county", "");
-        invoiceData.subCounty = getMapValue(dataMap, "subCounty", "");
-        invoiceData.invoiceNumber = getMapValue(dataMap, "invoiceNumber", "");
-        invoiceData.dateTime = getMapValue(dataMap, "dateTime", "");
-        invoiceData.totalAmount = getMapValue(dataMap, "totalAmount", "");
-        invoiceData.totalPaid = getMapValue(dataMap, "totalPaid", "");
-        invoiceData.totalWaived = getMapValue(dataMap, "totalWaived", "0.00");
-        invoiceData.balance = getMapValue(dataMap, "balance", "");
-        invoiceData.status = getMapValue(dataMap, "status", "");
-    }
-
-    /**
-     * Populate invoice data from JSON
-     */
-    private void populateFromJson(InvoiceData invoiceData, com.fasterxml.jackson.databind.JsonNode jsonData) {
-        invoiceData.patientIdentifier = jsonData.has("patientIdentifier") ? jsonData.get("patientIdentifier").asText()
-                : "";
-        invoiceData.patientName = jsonData.has("patientName") ? jsonData.get("patientName").asText() : "";
-        invoiceData.age = jsonData.has("age") ? jsonData.get("age").asText() : "";
-        invoiceData.gender = jsonData.has("gender") ? jsonData.get("gender").asText() : "";
-        invoiceData.county = jsonData.has("county") ? jsonData.get("county").asText() : "";
-        invoiceData.subCounty = jsonData.has("subCounty") ? jsonData.get("subCounty").asText() : "";
-        invoiceData.invoiceNumber = jsonData.has("invoiceNumber") ? jsonData.get("invoiceNumber").asText() : "";
-        invoiceData.dateTime = jsonData.has("dateTime") ? jsonData.get("dateTime").asText() : "";
-        invoiceData.totalAmount = jsonData.has("totalAmount") ? jsonData.get("totalAmount").asText() : "";
-        invoiceData.totalPaid = jsonData.has("totalPaid") ? jsonData.get("totalPaid").asText() : "";
-        invoiceData.totalWaived = jsonData.has("totalWaived") ? jsonData.get("totalWaived").asText() : "0.00";
-        invoiceData.balance = jsonData.has("balance") ? jsonData.get("balance").asText() : "";
-        invoiceData.status = jsonData.has("status") ? jsonData.get("status").asText() : "";
-    }
-
-    /**
-     * Safely extract value from map with fallback
-     */
-    private String getMapValue(java.util.Map<String, Object> map, String key, String defaultValue) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : defaultValue;
-    }
-
-    /**
-     * Create patient information cell
-     */
-    private com.itextpdf.layout.element.Cell createPatientInfoCell(InvoiceData data) {
-        com.itextpdf.layout.element.Cell cell = new com.itextpdf.layout.element.Cell()
-                .setBorder(null)
-                .setPadding(4f)
-                .setVerticalAlignment(VerticalAlignment.TOP);
-
-        cell.add(new Paragraph("CLIENT INFORMATION").setBold().setFontSize(10).setMarginBottom(4f));
-        cell.add(createInfoLine("ID:", data.patientIdentifier));
-        cell.add(createInfoLine("Name:", data.patientName));
-        cell.add(createInfoLine("Age:", data.age));
-        cell.add(createInfoLine("Gender:", data.gender));
-        cell.add(createInfoLine("County:", data.county));
-        cell.add(createInfoLine("Sub County:", data.subCounty));
-
+    private Cell createPatientInfoCell(Patient patient) {
+        Cell cell = PrintablePdfStyle.detailCell();
+        cell.add(PrintablePdfStyle.sectionHeading("Patient information"));
+        cell.add(PrintablePdfStyle.inlineInfoLine("Name", PdfGenerationUtils.getPatientName(patient), true));
+        cell.add(PrintablePdfStyle.inlineInfoLine("MR #", PdfGenerationUtils.getPatientIdentifier(patient)));
+        cell.add(PrintablePdfStyle.inlineInfoLine("Phone", PdfGenerationUtils.getPatientPhoneNumber(patient)));
+        cell.add(PrintablePdfStyle.inlineInfoLine("Address",
+                PdfGenerationUtils.formatPatientAddress(patient.getPersonAddress())));
         return cell;
     }
 
-    /**
-     * Create invoice summary cell
-     */
-    private com.itextpdf.layout.element.Cell createInvoiceSummaryCell(InvoiceData data) {
-        com.itextpdf.layout.element.Cell cell = new com.itextpdf.layout.element.Cell()
-                .setBorder(null)
-                .setPadding(4f)
-                .setVerticalAlignment(VerticalAlignment.TOP)
-                .setTextAlignment(TextAlignment.LEFT);
-
-        cell.add(new Paragraph("INVOICE SUMMARY").setBold().setFontSize(10).setMarginBottom(4f));
-        cell.add(createInfoLine("Invoice #:", data.invoiceNumber));
-        cell.add(createInfoLine("Date/Time:", data.dateTime));
-        cell.add(createInfoLine("Total Amount:", data.totalAmount));
-        cell.add(createInfoLine("Total Paid:", data.totalPaid));
-        
-        // Only show waived amount if it's greater than zero
-        try {
-            double waivedAmount = Double.parseDouble(data.totalWaived);
-            if (waivedAmount > 0) {
-                cell.add(createInfoLine("Total Waived:", data.totalWaived));
-            }
-        } catch (NumberFormatException e) {
-            // If parsing fails, skip showing the waived amount
-        }
-        
-        cell.add(createInfoLine("Balance:", data.balance));
-        cell.add(createInfoLine("Status:", data.status));
-
+    private Cell createInvoiceSummaryCell(Bill bill, PdfGenerationUtils.CurrencyFormatter currency) {
+        Cell cell = PrintablePdfStyle.detailCell();
+        cell.add(PrintablePdfStyle.sectionHeading("Invoice summary"));
+        cell.add(PrintablePdfStyle.infoLine("Invoice #", bill.getReceiptNumber()));
+        cell.add(PrintablePdfStyle.infoLine("Invoice date",
+                PdfGenerationUtils.formatDocumentDate(bill.getDateCreated())));
+        cell.add(PrintablePdfStyle.infoLine("Total amount", currency.formatCurrency(bill.getTotal())));
+        cell.add(PrintablePdfStyle.infoLine("Total paid",
+                currency.formatCurrency(bill.getTotalActualPayments())));
+        cell.add(PrintablePdfStyle.infoLine("Amount balance", currency.formatCurrency(bill.getBalance())));
+        cell.add(PrintablePdfStyle.emphasizedInfoLine("Invoice status",
+                bill.getStatus() != null ? bill.getStatus().toString() : "", 4f));
         return cell;
-    }
-
-    /**
-     * Create info line with label and value
-     */
-    private Paragraph createInfoLine(String label, String value) {
-        return new Paragraph()
-                .add(new com.itextpdf.layout.element.Text(label).setBold().setFontSize(8))
-                .add(new com.itextpdf.layout.element.Text(" " + value).setFontSize(8))
-                .setMarginBottom(1f);
-    }
-
-    /**
-     * Invoice data container class
-     */
-    private static class InvoiceData {
-        String patientIdentifier = "";
-        String patientName = "";
-        String age = "";
-        String gender = "";
-        String county = "";
-        String subCounty = "";
-
-        String invoiceNumber = "";
-        String dateTime = "";
-        String totalAmount = "";
-        String totalPaid = "";
-        String totalWaived = "";
-        String balance = "";
-        String status = "";
     }
 }

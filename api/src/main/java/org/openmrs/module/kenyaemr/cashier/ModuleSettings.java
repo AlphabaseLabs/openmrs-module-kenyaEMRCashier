@@ -45,6 +45,13 @@ public class ModuleSettings {
 	public static final Boolean DEFAULT_AUTO_CLOSE_PAID_BILLS_ENABLED = Boolean.TRUE;
 	public static final String DEFAULT_AUTO_CLOSE_PAID_BILLS_REASON = "Auto-closed by scheduler";
 	public static final Long DEFAULT_AUTO_CLOSE_PAID_BILLS_REPEAT_INTERVAL_SECONDS = 86400L;
+	public static final String PDF_PAID_STAMP_ENABLED_PROPERTY = "openhmis.cashier.pdf.paidStamp.enabled";
+	public static final Boolean DEFAULT_PDF_PAID_STAMP_ENABLED = Boolean.TRUE;
+	public static final String PDF_FOOTER_THANK_YOU_MESSAGE_PROPERTY =
+	        "openhmis.cashier.pdf.footer.thankYouMessage";
+	public static final String DEFAULT_PDF_FOOTER_THANK_YOU_MESSAGE =
+	        "Thank you for choosing {facilityName}. We wish you good health. "
+	                + "For billing inquiries, contact our finance department at {facilityTel}.";
 	public static final String DEPARTMENT_COLLECTIONS_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentCollections";
 	public static final String DEPARTMENT_REVENUE_REPORT_ID_PROPERTY = "openhmis.cashier.reports.departmentRevenue";
 	public static final String SHIFT_SUMMARY_REPORT_ID_PROPERTY = "openhmis.cashier.reports.shiftSummary";
@@ -72,6 +79,11 @@ public class ModuleSettings {
 	public static String getAutoClosePaidBillsReason() {
 		String reason = administrationService.getGlobalProperty(AUTO_CLOSE_PAID_BILLS_REASON_PROPERTY);
 		return StringUtils.isNotBlank(reason) ? reason : DEFAULT_AUTO_CLOSE_PAID_BILLS_REASON;
+	}
+
+	public static String getPdfFooterThankYouMessage() {
+		String message = administrationService.getGlobalProperty(PDF_FOOTER_THANK_YOU_MESSAGE_PROPERTY);
+		return StringUtils.isNotBlank(message) ? message : DEFAULT_PDF_FOOTER_THANK_YOU_MESSAGE;
 	}
 
 	public static Long getAutoClosePaidBillsRepeatIntervalSeconds() {

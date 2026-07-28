@@ -29,6 +29,6 @@
 	</bean>
 	
 	<bean id="genericRepository" class="org.openmrs.module.kenyaemr.cashier.api.base.entity.db.hibernate.BaseHibernateRepositoryImpl">
-		<constructor-arg name="sessionFactory" ref="sessionFactory" />
+		<constructor-arg ref="dbSessionFactory" />
 	</bean>
 </beans>

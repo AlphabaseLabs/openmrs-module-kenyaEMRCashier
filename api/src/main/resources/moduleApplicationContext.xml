@@ -289,6 +289,6 @@
 		<property name="transactionAttributeSource" ref="transactionAttributeSource" />
 	</bean>
 	<bean id="genericRepositoryDao" class="org.openmrs.module.kenyaemr.cashier.api.base.entity.db.hibernate.BaseHibernateRepositoryImpl">
-		<constructor-arg name="sessionFactory" ref="dbSessionFactory"/>
+		<constructor-arg ref="dbSessionFactory"/>
 	</bean>
 </beans>

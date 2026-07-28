@@ -2,19 +2,16 @@ package org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.invoice;
 
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.layout.Canvas;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.PageFooterHandler;
 
-public class InvoicePageFooterHandler implements org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService.PageFooterHandler {
+public class InvoicePageFooterHandler implements PdfDocumentService.PageFooterHandler {
 
     private final PageFooterHandler pageFooterHandler;
 
     public InvoicePageFooterHandler() {
-        PageFooterHandler.FooterConfig footerConfig = new PageFooterHandler.FooterConfig()
-                .setCustomFooterText("This invoice is computer-generated and valid without signature.")
-                .setPaymentTerms("")  // Remove facility name and payment terms line
-                .setThankYouMessage("and get well soon. For billing inquiries, contact our finance department.");
-
-        this.pageFooterHandler = new PageFooterHandler(footerConfig);
+        this.pageFooterHandler = new PageFooterHandler(new PageFooterHandler.FooterConfig(
+                "This invoice is computer-generated and valid without signature.", "", ""));
     }
 
     @Override

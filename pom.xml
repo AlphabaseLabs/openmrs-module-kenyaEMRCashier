@@ -6,7 +6,7 @@
 
 	<groupId>org.openmrs.module</groupId>
 	<artifactId>kenyaemr.cashier</artifactId>
-	<version>4.3.8</version>
+	<version>4.3.9</version>
 	<packaging>pom</packaging>
 	<name>OpenHMIS Cashier Module</name>
 	<description>Module to provide basic cashier functionality</description>
@@ -53,7 +53,6 @@
 	<properties>
 		<openMRSVersion>2.6.2</openMRSVersion>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<powermock.version>1.4.10</powermock.version>
 		<javaCompilerVersion>1.7</javaCompilerVersion>
 		<itextPdfVersion>8.0.2</itextPdfVersion>
 		<moduleId>kenyaemr.cashier</moduleId>
@@ -107,7 +106,7 @@
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>idgen-api</artifactId>
-				<version>2.7</version>
+				<version>4.7.0</version>
 				<type>jar</type>
 				<scope>provided</scope>
 			</dependency>
@@ -159,19 +158,6 @@
 				<exclusions>
 					<exclusion>
 						<groupId>javassist</groupId>
-						<artifactId>javassist</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-
-			<dependency>
-				<groupId>org.powermock</groupId>
-				<artifactId>powermock-module-junit4-rule-agent</artifactId>
-				<version>${powermock.version}</version>
-				<scope>test</scope>
-				<exclusions>
-					<exclusion>
-						<groupId>org.javassist</groupId>
 						<artifactId>javassist</artifactId>
 					</exclusion>
 				</exclusions>
@@ -384,10 +370,6 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>2.14</version>
-					<configuration>
-						<argLine>-javaagent:${settings.localRepository}/org/powermock/powermock-module-javaagent/${powermock.version}/powermock-module-javaagent-${powermock.version}.jar
-							-noverify</argLine>
-					</configuration>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
