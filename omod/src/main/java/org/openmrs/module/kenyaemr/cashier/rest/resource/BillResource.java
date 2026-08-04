@@ -55,6 +55,7 @@ import org.openmrs.module.kenyaemr.cashier.base.resource.AlreadyPagedWithLength;
 import org.openmrs.module.kenyaemr.cashier.base.resource.BaseRestDataResource;
 import org.openmrs.module.kenyaemr.cashier.base.resource.PagingUtil;
 import org.openmrs.module.kenyaemr.cashier.rest.controller.base.CashierResourceController;
+import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RequestContext;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -68,6 +69,8 @@ import org.openmrs.module.webservices.rest.web.representation.RefRepresentation;
 import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.resource.impl.AlreadyPaged;
 import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingResourceDescription;
+import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
+import org.openmrs.module.webservices.rest.web.response.ResponseException;
 
 import org.springframework.web.client.RestClientException;
 
@@ -198,6 +201,28 @@ public class BillResource extends BaseRestDataResource<Bill> {
 	@Override
 	public DelegatingResourceDescription getCreatableProperties() {
 		return getRepresentationDescription(new DefaultRepresentation());
+	}
+
+	@PropertySetter("dateCreated")
+	public void setBillDateCreated(Bill instance, Object dateCreated) {
+		instance.setDateCreated(RestResourceConversionUtil.toDate(dateCreated));
+	}
+
+	@Override
+	public Object update(String uuid, SimpleObject propertiesToUpdate, RequestContext context) throws ResponseException {
+		Bill bill = getByUniqueId(uuid);
+		if (bill == null) {
+			throw new ObjectNotFoundException();
+		}
+
+		boolean hasDateCreated = RestResourceConversionUtil.containsDateCreated(propertiesToUpdate);
+		Object dateCreated = hasDateCreated ? RestResourceConversionUtil.removeDateCreated(propertiesToUpdate) : null;
+		setConvertedProperties(bill, propertiesToUpdate, getUpdatableProperties(), false);
+		if (hasDateCreated) {
+			setBillDateCreated(bill, dateCreated);
+		}
+
+		return ConversionUtil.convertToRepresentation(save(bill), Representation.DEFAULT);
 	}
 
 	@PropertySetter("lineItems")

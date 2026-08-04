@@ -25,6 +25,8 @@ import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentMode;
+import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RequestContext;
 import org.openmrs.module.webservices.rest.web.annotation.PropertyGetter;
 import org.openmrs.module.webservices.rest.web.annotation.PropertySetter;
@@ -37,8 +39,8 @@ import org.openmrs.module.webservices.rest.web.resource.impl.AlreadyPaged;
 import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingResourceDescription;
 import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingSubResource;
 import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
+import org.openmrs.module.webservices.rest.web.response.ResponseException;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -72,14 +74,14 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	public DelegatingResourceDescription getCreatableProperties() {
 		DelegatingResourceDescription description = new DelegatingResourceDescription();
 		description.addProperty("instanceType");
-			description.addProperty("attributes");
-			description.addProperty("amount");
-			description.addProperty("amountTendered");
-			description.addProperty("item");
-			description.addProperty("allocations");
-
-			return description;
-		}
+		description.addProperty("attributes");
+		description.addProperty("amount");
+		description.addProperty("amountTendered");
+		description.addProperty("item");
+		description.addProperty("allocations");
+		description.addProperty(RestResourceConversionUtil.DATE_CREATED_PROPERTY);
+		return description;
+	}
 
 	// Work around TypeVariable issue on base generic property
 	// (BaseCustomizableInstanceData.getInstanceType)
@@ -135,43 +137,22 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 
 	@PropertySetter("amount")
 	public void setPaymentAmount(Payment instance, Object price) {
-		// TODO Conversion logic
-		double amount;
-		if (price instanceof Integer) {
-			int rawAmount = (Integer) price;
-			amount = Double.valueOf(rawAmount);
-			instance.setAmount(BigDecimal.valueOf(amount));
-		} else {
-			instance.setAmount(BigDecimal.valueOf((Double) price));
-		}
+		instance.setAmount(RestResourceConversionUtil.toBigDecimal(price, "amount"));
 	}
 
 	@PropertySetter("amountTendered")
 	public void setPaymentAmountTendered(Payment instance, Object price) {
-		// TODO Conversion logic
-		double amount;
-		if (price instanceof Integer) {
-			int rawAmount = (Integer) price;
-			amount = Double.valueOf(rawAmount);
-			instance.setAmountTendered(BigDecimal.valueOf(amount));
-		} else {
-			instance.setAmountTendered(BigDecimal.valueOf((Double) price));
-		}
+		instance.setAmountTendered(RestResourceConversionUtil.toBigDecimal(price, "amountTendered"));
 	}
 
 	@PropertyGetter("dateCreated")
 	public Long getPaymentDate(Payment instance) {
-		return instance.getDateCreated().getTime();
+		return instance.getDateCreated() == null ? null : instance.getDateCreated().getTime();
 	}
 
 	@PropertySetter("dateCreated")
 	public void setPaymentDate(Payment instance, Object date) {
-		if (date instanceof Long) {
-			instance.setDateCreated(new java.util.Date((Long) date));
-		} else if (date instanceof java.util.Date) {
-			instance.setDateCreated((java.util.Date) date);
-		}
-		// If null or other type, let it pass (will use default)
+		instance.setDateCreated(RestResourceConversionUtil.toDate(date));
 	}
 
 	@Override
@@ -185,6 +166,24 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 		service.save(bill);
 
 		return delegate;
+	}
+
+	@Override
+	public Object update(String parentUniqueId, String uuid, SimpleObject propertiesToUpdate, RequestContext context)
+	        throws ResponseException {
+		IBillService service = Context.getService(IBillService.class);
+		Bill bill = findBill(service, parentUniqueId);
+		Payment payment = findPayment(bill, uuid);
+		boolean hasDateCreated = RestResourceConversionUtil.containsDateCreated(propertiesToUpdate);
+		Object dateCreated = hasDateCreated ? RestResourceConversionUtil.removeDateCreated(propertiesToUpdate) : null;
+		setConvertedProperties(payment, propertiesToUpdate, getUpdatableProperties(), false);
+		if (hasDateCreated) {
+			setPaymentDate(payment, dateCreated);
+		}
+		normalizePaymentAllocations(payment, bill);
+		bill.synchronizeBillStatus();
+		service.save(bill);
+		return ConversionUtil.convertToRepresentation(payment, Representation.DEFAULT);
 	}
 
 	private void normalizePaymentAllocations(Payment payment, Bill bill) {
