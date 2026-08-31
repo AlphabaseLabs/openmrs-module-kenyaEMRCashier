@@ -15,14 +15,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.layout.element.Image;
 import org.apache.commons.lang.StringUtils;
-import org.openmrs.api.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Loads the shared branding logo with bounded file and network I/O. */
 public final class BrandingLogoProvider {
-
-	static final String GP_BRANDING_CONFIGURATION = "alphabaseadmin.configurations.branding";
 
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -41,7 +38,7 @@ public final class BrandingLogoProvider {
 
 	static String getConfiguredLogoLocation() {
 		try {
-			String json = Context.getAdministrationService().getGlobalProperty(GP_BRANDING_CONFIGURATION);
+			String json = BrandingConfigurationProvider.readConfiguration();
 			return resolveLogoLocation(json);
 		}
 		catch (Exception e) {

@@ -163,6 +163,20 @@ public final class PrintablePdfStyle {
                 .setMarginBottom(bottomMargin);
     }
 
+    public static Paragraph noteBlock(String text) {
+        return new Paragraph()
+                .add(new Text("Note:\n")
+                        .setFont(CarbonPdfFonts.semibold())
+                        .setFontColor(TEXT))
+                .add(new Text(safe(text))
+                        .setFont(CarbonPdfFonts.regular())
+                        .setFontColor(SECONDARY_TEXT))
+                .setFontSize(10.5f)
+                .setFixedLeading(13.5f)
+                .setMarginTop(10f)
+                .setMarginBottom(0);
+    }
+
     private static Cell summaryCell(String text, TextAlignment alignment) {
         return new Cell()
                 .add(new Paragraph(safe(text)).setFont(CarbonPdfFonts.semibold()).setFontSize(12f)

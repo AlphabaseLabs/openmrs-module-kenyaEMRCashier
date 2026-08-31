@@ -82,6 +82,7 @@ import org.openmrs.module.kenyaemr.cashier.api.base.exception.PrivilegeException
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingConfigurationProvider;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingLogoProvider;
 import org.openmrs.module.kenyaemr.cashier.util.Utils;
 import org.springframework.transaction.annotation.Transactional;
@@ -1706,11 +1707,32 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		doc.add(divider);
 		doc.add(balanceSection);
 		doc.add(divider);
+		Paragraph receiptNote = BrandingConfigurationProvider.shouldShowBillingNote()
+		        ? createReceiptNote(bill.getNote(), helvetica, helveticaBold)
+		        : null;
+		if (receiptNote != null) {
+			doc.add(receiptNote);
+			doc.add(divider);
+		}
 		doc.add(new Paragraph("You were served by " + bill.getCashier().getName()).setFont(footerSectionFont).setFontSize(8).setTextAlignment(TextAlignment.CENTER));
 		doc.add(new Paragraph("GET WELL SOON").setFont(footerSectionFont).setFontSize(10).setTextAlignment(TextAlignment.CENTER));
 
 		doc.close();
 		return returnFile;
+	}
+
+	static Paragraph createReceiptNote(String note, PdfFont regularFont, PdfFont semiboldFont) {
+		String printableNote = StringUtils.trimToNull(note);
+		if (printableNote == null) {
+			return null;
+		}
+
+		return new Paragraph()
+				.add(new Text("Note: ").setFont(semiboldFont))
+				.add(new Text(printableNote).setFont(regularFont))
+				.setFontSize(10)
+				.setMarginTop(0)
+				.setMarginBottom(0);
 	}
 
 	private void addBillLineItem(BillLineItem item, Table table, PdfFont font) {

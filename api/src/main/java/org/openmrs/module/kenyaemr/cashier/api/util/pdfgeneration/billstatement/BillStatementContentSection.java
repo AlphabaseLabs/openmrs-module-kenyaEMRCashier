@@ -4,6 +4,7 @@ import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
+import org.apache.commons.lang3.StringUtils;
 import org.openmrs.User;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
@@ -11,6 +12,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingConfigurationProvider;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.PrintablePdfStyle;
 
 import java.math.BigDecimal;
@@ -32,6 +34,7 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
         createDetailedBillItemsTable(doc, bill, currency);
         createPaymentHistoryTable(doc, bill, currency);
         createBillSummary(doc, bill, currency);
+        createBillNote(doc, bill);
     }
 
     private void createDetailedBillItemsTable(Document doc, Bill bill,
@@ -165,6 +168,16 @@ public class BillStatementContentSection implements PdfDocumentService.ContentSe
                 currency.formatCurrency(balanceDue), true);
 
         doc.add(summaryTable);
+    }
+
+    private void createBillNote(Document doc, Bill bill) {
+        if (!BrandingConfigurationProvider.shouldShowBillingNote()) {
+            return;
+        }
+        String note = StringUtils.trimToNull(bill.getNote());
+        if (note != null) {
+            doc.add(PrintablePdfStyle.noteBlock(note));
+        }
     }
 
     private float[] getStatementItemColumnWidths(boolean showDiscount, boolean showTax) {
