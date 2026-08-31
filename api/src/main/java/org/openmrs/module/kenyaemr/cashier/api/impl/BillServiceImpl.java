@@ -115,6 +115,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
         , IBillService {
 
 	private static final int MAX_LENGTH_RECEIPT_NUMBER = 255;
+	private static final int MAX_LENGTH_NOTE = 1024;
 	private static final Log LOG = LogFactory.getLog(BillServiceImpl.class);
 	private static final String GP_DEFAULT_LOCATION = "kenyaemr.defaultLocation";
 	private static final String GP_FACILITY_ADDRESS_DETAILS = "kenyaemr.cashier.receipt.facilityAddress";
@@ -136,7 +137,14 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 
 	@Override
 	protected void validate(Bill bill) {
+		validateBillNote(bill);
 		validatePaymentAttributes(bill);
+	}
+
+	private void validateBillNote(Bill bill) {
+		if (bill != null && bill.getNote() != null && bill.getNote().length() > MAX_LENGTH_NOTE) {
+			throw new IllegalArgumentException("The bill note must be 1024 characters or fewer.");
+		}
 	}
 
 	@Override

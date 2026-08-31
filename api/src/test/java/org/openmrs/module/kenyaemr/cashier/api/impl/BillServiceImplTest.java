@@ -98,4 +98,33 @@ public class BillServiceImplTest extends BaseModuleContextSensitiveTest {
         assertFalse("Bills that are both closed and voided should not be able to accept new items", 
                    closedAndVoidedBill.canAcceptNewItems());
     }
+
+    @Test
+    public void validate_shouldAllowNullBlankAndMaximumLengthBillNote() {
+        BillServiceImpl service = new BillServiceImpl();
+        Bill bill = new Bill();
+
+        service.validate(bill);
+
+        bill.setNote("");
+        service.validate(bill);
+
+        bill.setNote(repeat('a', 1024));
+        service.validate(bill);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validate_shouldRejectBillNoteLongerThanMaximumLength() {
+        BillServiceImpl service = new BillServiceImpl();
+        Bill bill = new Bill();
+        bill.setNote(repeat('a', 1025));
+
+        service.validate(bill);
+    }
+
+    private static String repeat(char character, int count) {
+        char[] characters = new char[count];
+        java.util.Arrays.fill(characters, character);
+        return new String(characters);
+    }
 }

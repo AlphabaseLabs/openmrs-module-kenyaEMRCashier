@@ -117,6 +117,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("receiptNumber");
 			description.addProperty("status");
 			description.addProperty("adjustmentReason");
+			description.addProperty("note");
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
@@ -147,6 +148,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("receiptNumber");
 			description.addProperty("status");
 			description.addProperty("adjustmentReason");
+			description.addProperty("note");
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
@@ -177,6 +179,7 @@ public class BillResource extends BaseRestDataResource<Bill> {
 			description.addProperty("receiptNumber");
 			description.addProperty("status");
 			description.addProperty("adjustmentReason");
+			description.addProperty("note");
 			description.addProperty("id");
 			description.addProperty("closed");
 			description.addProperty("closeReason");
@@ -208,6 +211,11 @@ public class BillResource extends BaseRestDataResource<Bill> {
 		instance.setDateCreated(RestResourceConversionUtil.toDate(dateCreated));
 	}
 
+	@PropertySetter("note")
+	public void setBillNote(Bill instance, Object note) {
+		instance.setNote(note == null ? null : StringUtils.trimToNull(note.toString()));
+	}
+
 	@Override
 	public Object update(String uuid, SimpleObject propertiesToUpdate, RequestContext context) throws ResponseException {
 		Bill bill = getByUniqueId(uuid);
@@ -217,9 +225,14 @@ public class BillResource extends BaseRestDataResource<Bill> {
 
 		boolean hasDateCreated = RestResourceConversionUtil.containsDateCreated(propertiesToUpdate);
 		Object dateCreated = hasDateCreated ? RestResourceConversionUtil.removeDateCreated(propertiesToUpdate) : null;
+		boolean hasNote = propertiesToUpdate.containsKey("note");
+		Object note = hasNote ? propertiesToUpdate.remove("note") : null;
 		setConvertedProperties(bill, propertiesToUpdate, getUpdatableProperties(), false);
 		if (hasDateCreated) {
 			setBillDateCreated(bill, dateCreated);
+		}
+		if (hasNote) {
+			setBillNote(bill, note);
 		}
 
 		return ConversionUtil.convertToRepresentation(save(bill), Representation.DEFAULT);

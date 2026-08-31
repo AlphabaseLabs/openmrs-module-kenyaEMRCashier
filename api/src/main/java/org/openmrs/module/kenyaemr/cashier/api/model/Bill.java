@@ -48,6 +48,7 @@ public class Bill extends BaseOpenmrsData {
 	private Set<Bill> adjustedBy;
 	private Boolean receiptPrinted = false;
 	private String adjustmentReason;
+	private String note;
 	private Boolean closed = false;
 	private String closeReason;
 	private User closedBy;
@@ -59,6 +60,14 @@ public class Bill extends BaseOpenmrsData {
 
 	public void setAdjustmentReason(String adjustmentReason) {
 		this.adjustmentReason = adjustmentReason;
+	}
+
+	public String getNote() {
+		return note;
+	}
+
+	public void setNote(String note) {
+		this.note = note;
 	}
 
 	public Boolean isReceiptPrinted() {
