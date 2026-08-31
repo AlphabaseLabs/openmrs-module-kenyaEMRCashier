@@ -82,6 +82,7 @@ import org.openmrs.module.kenyaemr.cashier.api.base.exception.PrivilegeException
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingLogoProvider;
 import org.openmrs.module.kenyaemr.cashier.util.Utils;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,8 +90,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.security.AccessControlException;
@@ -103,7 +102,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -1801,6 +1799,11 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	 * @return Image object or null if not found
 	 */
 	private Image getLogoFromFacilityInformation() {
+		Image configuredLogo = BrandingLogoProvider.loadConfiguredLogo();
+		if (configuredLogo != null) {
+			return configuredLogo;
+		}
+
 		try {
 			String facilityInfoJson = Context.getAdministrationService()
 					.getGlobalProperty(GP_FACILITY_INFORMATION);
@@ -1811,39 +1814,18 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 				// First try to use logo data from global property (base64 encoded)
 				String logoData = getJsonValue(facilityNode, "logoData", "");
 				if (StringUtils.isNotEmpty(logoData)) {
-					try {
-						byte[] imageBytes = java.util.Base64.getDecoder().decode(logoData);
-						return new Image(ImageDataFactory.create(imageBytes));
-					} catch (Exception e) {
-						LOG.warn("Failed to decode base64 logo data", e);
+					Image logo = BrandingLogoProvider.loadBase64(logoData);
+					if (logo != null) {
+						return logo;
 					}
 				}
 				
 				// If no logo data, try to use logo path from global property
 				String logoPath = getJsonValue(facilityNode, "logoPath", "");
 				if (StringUtils.isNotEmpty(logoPath)) {
-					try {
-						java.io.File logoFile = new java.io.File(logoPath);
-						if (logoFile.exists()) {
-							byte[] imageBytes = java.nio.file.Files.readAllBytes(logoFile.toPath());
-							return new Image(ImageDataFactory.create(imageBytes));
-						} else {
-							// Try as resource path
-							InputStream inputStream = getClass().getResourceAsStream(logoPath);
-							if (inputStream != null) {
-								ByteArrayOutputStream baos = new ByteArrayOutputStream();
-								byte[] buffer = new byte[1024];
-								int length;
-								while ((length = inputStream.read(buffer)) != -1) {
-									baos.write(buffer, 0, length);
-								}
-								byte[] imageBytes = baos.toByteArray();
-								inputStream.close();
-								return new Image(ImageDataFactory.create(imageBytes));
-							}
-						}
-					} catch (Exception e) {
-						LOG.warn("Failed to load logo from path: " + logoPath, e);
+					Image logo = BrandingLogoProvider.loadLocation(logoPath);
+					if (logo != null) {
+						return logo;
 					}
 				}
 			}

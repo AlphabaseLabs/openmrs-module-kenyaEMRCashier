@@ -13,14 +13,10 @@ import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.properties.VerticalAlignment;
-import com.itextpdf.io.image.ImageDataFactory;
 import org.apache.commons.lang.StringUtils;
 import org.openmrs.api.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
 
 /**
  * Reusable document header component containing logo, facility name, and
@@ -93,12 +89,8 @@ public class DocumentHeader {
      * @param doc The PDF document to add the header to
      */
     public void render(Document doc) {
-        // If no custom facility info is set, parse from global property
-        if (facilityInfo == null) {
-            facilityInfo = loadFacilityInformation();
-        }
-
-        createHeader(doc, facilityInfo, documentTitle, documentSubtitle);
+        FacilityInfo effectiveFacilityInfo = facilityInfo == null ? loadFacilityInformation() : facilityInfo;
+        createHeader(doc, effectiveFacilityInfo, documentTitle, documentSubtitle);
     }
 
     /**
@@ -134,6 +126,12 @@ public class DocumentHeader {
             } catch (Exception e) {
                 log.warn("Failed to parse facility information JSON. Using defaults.", e);
             }
+        }
+
+        String configuredLogo = BrandingLogoProvider.getConfiguredLogoLocation();
+        if (StringUtils.isNotEmpty(configuredLogo)) {
+            info.logoPath = configuredLogo;
+            info.logoData = "";
         }
 
         return info;
@@ -288,42 +286,13 @@ public class DocumentHeader {
      */
     private Image createCenteredLogo(FacilityInfo info) {
         try {
-            byte[] imageBytes = null;
-            // First try to use logo data from global property (base64 encoded)
             if (StringUtils.isNotEmpty(info.logoData)) {
-                try {
-                    imageBytes = java.util.Base64.getDecoder().decode(info.logoData);
-                } catch (Exception e) {
-                    log.warn("Failed to decode base64 logo data", e);
+                Image logo = BrandingLogoProvider.loadBase64(info.logoData);
+                if (logo != null) {
+                    return logo;
                 }
             }
-            // If no logo data, try to use logo path from global property
-            if (imageBytes == null && StringUtils.isNotEmpty(info.logoPath)) {
-                try {
-                    java.io.File logoFile = new java.io.File(info.logoPath);
-                    if (logoFile.exists()) {
-                        imageBytes = java.nio.file.Files.readAllBytes(logoFile.toPath());
-                    } else {
-                        InputStream inputStream = getClass().getResourceAsStream(info.logoPath);
-                        if (inputStream != null) {
-                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                            byte[] buffer = new byte[1024];
-                            int length;
-                            while ((length = inputStream.read(buffer)) != -1) {
-                                baos.write(buffer, 0, length);
-                            }
-                            imageBytes = baos.toByteArray();
-                            inputStream.close();
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to load logo from path: " + info.logoPath, e);
-                }
-            }
-
-            if (imageBytes != null) {
-                return new Image(ImageDataFactory.create(imageBytes));
-            }
+            return BrandingLogoProvider.loadLocation(info.logoPath);
         } catch (Exception e) {
             log.warn("Failed to create logo image", e);
         }
