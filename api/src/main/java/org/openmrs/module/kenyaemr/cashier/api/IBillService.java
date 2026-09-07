@@ -15,7 +15,9 @@
 package org.openmrs.module.kenyaemr.cashier.api;
 
 import java.io.File;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import org.openmrs.Patient;
 import org.openmrs.annotation.Authorized;
@@ -27,6 +29,7 @@ import org.openmrs.module.kenyaemr.cashier.api.model.BillingHistorySummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.HistorySearchCriteria;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistoryMetricsSummary;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentHistorySummary;
+import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,6 +149,25 @@ public interface IBillService extends IEntityDataService<Bill> {
 	 */
 	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
 	Bill syncBillStatus(String billUuid);
+
+	/**
+	 * Adds a payment to a bill atomically.
+	 */
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	Payment addPayment(String billUuid, Payment payment);
+
+	/**
+	 * Updates a payment's editable fields atomically.
+	 */
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	Payment updatePayment(String billUuid, String paymentUuid, boolean updateDateCreated, Date dateCreated,
+	        Map<String, String> attributeValues);
+
+	/**
+	 * Voids a payment atomically without blocking on pre-existing duplicate payment attributes.
+	 */
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	void voidPayment(String billUuid, String paymentUuid, String reason);
 
 	/**
 	 * Searches for non-closed bills for a patient created on the same day.

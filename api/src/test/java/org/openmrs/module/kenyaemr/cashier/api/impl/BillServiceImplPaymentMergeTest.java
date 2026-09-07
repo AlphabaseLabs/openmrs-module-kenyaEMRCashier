@@ -1,6 +1,7 @@
 package org.openmrs.module.kenyaemr.cashier.api.impl;
 
 import org.junit.Test;
+import org.openmrs.module.kenyaemr.cashier.api.base.entity.db.hibernate.BaseHibernateRepository;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
@@ -10,11 +11,17 @@ import org.openmrs.module.kenyaemr.cashier.api.model.PaymentModeAttributeType;
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class BillServiceImplPaymentMergeTest {
 
@@ -107,6 +114,53 @@ public class BillServiceImplPaymentMergeTest {
 		assertTrue(billService.shouldMergeIncomingPayment(existingBill, incomingPayment));
 	}
 
+	@Test
+	public void persistBillWithoutPaymentAttributeValidation_shouldAllowRemainingPreExistingDuplicates() {
+		Bill bill = createBillWithPayments(
+		    createPayment(101, "first-payment-uuid", false, "6640"),
+		    createPayment(102, "second-payment-uuid", false, "6640"),
+		    createPayment(103, "voided-payment-uuid", true, "6640"));
+		BaseHibernateRepository repository = mock(BaseHibernateRepository.class);
+		when(repository.save(bill)).thenReturn(bill);
+		billService.setRepository(repository);
+
+		try {
+			billService.validate(bill);
+			fail("Normal bill validation should reject the remaining duplicate active payments");
+		}
+		catch (IllegalArgumentException expected) {
+			// Expected: ordinary bill saves must continue to enforce payment attribute uniqueness.
+		}
+
+		assertSame(bill, billService.persistBillWithoutPaymentAttributeValidation(bill));
+		verify(repository).save(bill);
+	}
+
+	@Test
+	public void validateChangedPaymentAttributes_shouldAllowIncrementalRepairOfLegacyDuplicates() {
+		Payment paymentToRepair = createPayment(101, "first-payment-uuid", false, "6640");
+		Bill bill = createBillWithPayments(paymentToRepair,
+		    createPayment(102, "second-payment-uuid", false, "6640"),
+		    createPayment(103, "third-payment-uuid", false, "6640"));
+
+		Set<PaymentAttribute> changed = billService.applyPaymentAttributeUpdates(paymentToRepair,
+		    Collections.singletonMap("first-payment-uuid-attribute", "6641"));
+
+		billService.validateChangedPaymentAttributes(bill, paymentToRepair, changed);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void validateChangedPaymentAttributes_shouldRejectNewConflict() {
+		Payment paymentToEdit = createPayment(101, "first-payment-uuid", false, "1234");
+		Bill bill = createBillWithPayments(paymentToEdit,
+		    createPayment(102, "second-payment-uuid", false, "6640"));
+
+		Set<PaymentAttribute> changed = billService.applyPaymentAttributeUpdates(paymentToEdit,
+		    Collections.singletonMap("first-payment-uuid-attribute", "6640"));
+
+		billService.validateChangedPaymentAttributes(bill, paymentToEdit, changed);
+	}
+
 	private Bill createBillWithPayments(Payment... payments) {
 		Bill bill = new Bill();
 		Set<Payment> paymentSet = new HashSet<Payment>();
@@ -130,6 +184,7 @@ public class BillServiceImplPaymentMergeTest {
 
 		if (transactionIdValue != null) {
 			PaymentAttribute attribute = new PaymentAttribute();
+			attribute.setUuid(uuid + "-attribute");
 			attribute.setAttributeType(createTransactionIdAttributeType());
 			attribute.setValue(transactionIdValue);
 			attribute.setOwner(payment);

@@ -20,7 +20,6 @@ import org.openmrs.module.stockmanagement.api.model.StockItem;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
 import org.openmrs.module.kenyaemr.cashier.api.IPaymentModeService;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
-import org.openmrs.module.kenyaemr.cashier.api.model.BillLineItem;
 import org.openmrs.module.kenyaemr.cashier.api.model.LinePaymentAllocation;
 import org.openmrs.module.kenyaemr.cashier.api.model.Payment;
 import org.openmrs.module.kenyaemr.cashier.api.model.PaymentAttribute;
@@ -42,7 +41,10 @@ import org.openmrs.module.webservices.rest.web.response.ObjectNotFoundException;
 import org.openmrs.module.webservices.rest.web.response.ResponseException;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -158,75 +160,51 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	@Override
 	public Payment save(Payment delegate) {
 		IBillService service = Context.getService(IBillService.class);
-		Bill bill = delegate.getBill();
-		bill.addPayment(delegate);
-		normalizePaymentAllocations(delegate, bill);
-		// Synchronize the bill status based on the current payments and deposits
-		bill.synchronizeBillStatus();
-		service.save(bill);
-
-		return delegate;
+		if (delegate.getBill() == null) {
+			throw new IllegalArgumentException("The payment bill must be defined.");
+		}
+		return service.addPayment(delegate.getBill().getUuid(), delegate);
 	}
 
 	@Override
 	public Object update(String parentUniqueId, String uuid, SimpleObject propertiesToUpdate, RequestContext context)
 	        throws ResponseException {
 		IBillService service = Context.getService(IBillService.class);
-		Bill bill = findBill(service, parentUniqueId);
-		Payment payment = findPayment(bill, uuid);
 		boolean hasDateCreated = RestResourceConversionUtil.containsDateCreated(propertiesToUpdate);
 		Object dateCreated = hasDateCreated ? RestResourceConversionUtil.removeDateCreated(propertiesToUpdate) : null;
-		setConvertedProperties(payment, propertiesToUpdate, getUpdatableProperties(), false);
-		if (hasDateCreated) {
-			setPaymentDate(payment, dateCreated);
+		boolean hasAttributes = propertiesToUpdate.containsKey("attributes");
+		Object attributes = hasAttributes ? propertiesToUpdate.remove("attributes") : null;
+		if (!propertiesToUpdate.isEmpty()) {
+			throw new IllegalArgumentException("Only payment date and attributes can be updated.");
 		}
-		normalizePaymentAllocations(payment, bill);
-		bill.synchronizeBillStatus();
-		service.save(bill);
+		Payment payment = service.updatePayment(parentUniqueId, uuid, hasDateCreated,
+		    hasDateCreated ? RestResourceConversionUtil.toDate(dateCreated) : null,
+		    hasAttributes ? getPaymentAttributeValueUpdates(attributes) : null);
 		return ConversionUtil.convertToRepresentation(payment, Representation.DEFAULT);
 	}
 
-	private void normalizePaymentAllocations(Payment payment, Bill bill) {
-		if (payment == null || payment.getAllocations() == null) {
-			return;
+	private Map<String, String> getPaymentAttributeValueUpdates(Object attributes) {
+		if (!(attributes instanceof Collection)) {
+			throw new IllegalArgumentException("Payment attributes must be a collection.");
 		}
-
-		for (LinePaymentAllocation allocation : payment.getAllocations()) {
-			if (allocation == null) {
-				continue;
+		Map<String, String> updates = new LinkedHashMap<String, String>();
+		for (Object value : (Collection<?>)attributes) {
+			if (!(value instanceof Map)) {
+				throw new IllegalArgumentException("Each payment attribute must be an object.");
 			}
-			if (allocation.getAllocatedAmount() == null) {
-				throw new IllegalArgumentException("Payment allocation amount must be defined.");
+			Map<?, ?> attribute = (Map<?, ?>)value;
+			Object attributeUuid = attribute.get("uuid");
+			if (attributeUuid == null || attributeUuid.toString().trim().isEmpty()) {
+				throw new IllegalArgumentException("Payment attribute UUID must be defined.");
 			}
-
-			BillLineItem lineItem = findBillLineItem(bill, allocation);
-			allocation.setBill(bill);
-			allocation.setPayment(payment);
-			lineItem.addAllocation(allocation);
-			lineItem.synchronizePaymentStatus();
+			String uuid = attributeUuid.toString();
+			if (updates.containsKey(uuid)) {
+				throw new IllegalArgumentException("Duplicate payment attribute UUID: " + uuid);
+			}
+			Object attributeValue = attribute.get("value");
+			updates.put(uuid, attributeValue == null ? null : attributeValue.toString());
 		}
-	}
-
-	private BillLineItem findBillLineItem(Bill bill, LinePaymentAllocation allocation) {
-		if (bill == null || bill.getLineItems() == null || allocation == null || allocation.getBillLineItem() == null) {
-			throw new IllegalArgumentException("Payment allocation billLineItem must be defined.");
-		}
-
-		String lineItemUuid = allocation.getBillLineItem().getUuid();
-		for (BillLineItem lineItem : bill.getLineItems()) {
-			if (lineItem == null) {
-				continue;
-			}
-			if (lineItem == allocation.getBillLineItem()) {
-				return lineItem;
-			}
-			if (lineItemUuid != null && lineItemUuid.equals(lineItem.getUuid())) {
-				allocation.setBillLineItem(lineItem);
-				return lineItem;
-			}
-		}
-
-		throw new IllegalArgumentException("Payment allocation billLineItem must belong to the bill.");
+		return updates;
 	}
 
 	@Override
@@ -237,25 +215,7 @@ public class PaymentResource extends DelegatingSubResource<Payment, Bill, BillRe
 	@Override
 	public void delete(String parentUniqueId, final String uuid, String reason, RequestContext context) {
 		IBillService service = Context.getService(IBillService.class);
-		Bill bill = findBill(service, parentUniqueId);
-		Payment payment = findPayment(bill, uuid);
-
-		payment.setVoided(true);
-		payment.setVoidReason(reason);
-		payment.setVoidedBy(Context.getAuthenticatedUser());
-
-		// Void associated allocations
-		if (payment.getAllocations() != null) {
-			for (LinePaymentAllocation allocation : payment.getAllocations()) {
-				if (allocation != null && !Boolean.TRUE.equals(allocation.getVoided())) {
-					allocation.setVoided(true);
-					allocation.setVoidReason(reason);
-					allocation.setVoidedBy(Context.getAuthenticatedUser());
-				}
-			}
-		}
-
-		service.save(bill);
+		service.voidPayment(parentUniqueId, uuid, reason);
 	}
 
 	@Override

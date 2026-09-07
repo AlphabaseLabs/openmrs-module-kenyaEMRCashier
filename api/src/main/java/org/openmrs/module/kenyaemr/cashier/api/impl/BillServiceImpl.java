@@ -106,6 +106,7 @@ import java.util.HashSet;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 /**
@@ -437,6 +438,188 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		normalizeLineItemPriceOverrides(bill);
 		allocatePaymentsToLineItems(bill);
 		return super.save(bill);
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	@Transactional
+	public Payment addPayment(String billUuid, Payment payment) {
+		Bill bill = requireBill(billUuid);
+		if (payment == null) {
+			throw new NullPointerException("The payment must be defined.");
+		}
+
+		bill.addPayment(payment);
+		normalizePaymentAllocations(payment, bill);
+		bill.synchronizeBillStatus();
+		save(bill);
+		return payment;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	@Transactional
+	public Payment updatePayment(String billUuid, String paymentUuid, boolean updateDateCreated, Date dateCreated,
+	        Map<String, String> attributeValues) {
+		Bill bill = requireBill(billUuid);
+		Payment payment = requirePayment(bill, paymentUuid);
+
+		if (updateDateCreated) {
+			payment.setDateCreated(dateCreated);
+		}
+
+		Set<PaymentAttribute> changedAttributes = applyPaymentAttributeUpdates(payment, attributeValues);
+		validateChangedPaymentAttributes(bill, payment, changedAttributes);
+		persistBillWithoutPaymentAttributeValidation(bill);
+		return payment;
+	}
+
+	@Override
+	@Authorized({ PrivilegeConstants.MANAGE_BILLS })
+	@Transactional
+	public void voidPayment(String billUuid, String paymentUuid, String reason) {
+		if (StringUtils.isBlank(reason)) {
+			throw new IllegalArgumentException("The reason to void must be defined.");
+		}
+
+		Bill bill = requireBill(billUuid);
+		Payment payment = requirePayment(bill, paymentUuid);
+		User user = Context.getAuthenticatedUser();
+		Date dateVoided = new Date();
+		setVoidProperties(payment, reason, user, dateVoided);
+
+		if (payment.getAllocations() != null) {
+			for (LinePaymentAllocation allocation : payment.getAllocations()) {
+				if (allocation != null && !Boolean.TRUE.equals(allocation.getVoided())) {
+					setVoidProperties(allocation, reason, user, dateVoided);
+				}
+			}
+		}
+
+		persistBillWithoutPaymentAttributeValidation(bill);
+	}
+
+	private Bill requireBill(String billUuid) {
+		Bill bill = getByUuid(billUuid);
+		if (bill == null) {
+			throw new IllegalArgumentException("Bill not found with UUID: " + billUuid);
+		}
+		return bill;
+	}
+
+	private Payment requirePayment(Bill bill, String paymentUuid) {
+		if (StringUtils.isBlank(paymentUuid) || bill.getPayments() == null) {
+			throw new IllegalArgumentException("Payment not found with UUID: " + paymentUuid);
+		}
+		for (Payment payment : bill.getPayments()) {
+			if (payment != null && paymentUuid.equals(payment.getUuid())) {
+				return payment;
+			}
+		}
+		throw new IllegalArgumentException("Payment not found with UUID: " + paymentUuid);
+	}
+
+	private void normalizePaymentAllocations(Payment payment, Bill bill) {
+		if (payment.getAllocations() == null) {
+			return;
+		}
+		for (LinePaymentAllocation allocation : payment.getAllocations()) {
+			if (allocation == null) {
+				continue;
+			}
+			if (allocation.getAllocatedAmount() == null) {
+				throw new IllegalArgumentException("Payment allocation amount must be defined.");
+			}
+
+			BillLineItem lineItem = requireBillLineItem(bill, allocation);
+			allocation.setBill(bill);
+			allocation.setPayment(payment);
+			lineItem.addAllocation(allocation);
+			lineItem.synchronizePaymentStatus();
+		}
+	}
+
+	private BillLineItem requireBillLineItem(Bill bill, LinePaymentAllocation allocation) {
+		if (allocation.getBillLineItem() == null || bill.getLineItems() == null) {
+			throw new IllegalArgumentException("Payment allocation billLineItem must be defined.");
+		}
+		String lineItemUuid = allocation.getBillLineItem().getUuid();
+		for (BillLineItem lineItem : bill.getLineItems()) {
+			if (lineItem == allocation.getBillLineItem()
+			        || (lineItem != null && lineItemUuid != null && lineItemUuid.equals(lineItem.getUuid()))) {
+				allocation.setBillLineItem(lineItem);
+				return lineItem;
+			}
+		}
+		throw new IllegalArgumentException("Payment allocation billLineItem must belong to the bill.");
+	}
+
+	Set<PaymentAttribute> applyPaymentAttributeUpdates(Payment payment, Map<String, String> attributeValues) {
+		Set<PaymentAttribute> changed = new LinkedHashSet<PaymentAttribute>();
+		if (attributeValues == null) {
+			return changed;
+		}
+		Map<String, PaymentAttribute> attributesByUuid = new LinkedHashMap<String, PaymentAttribute>();
+		if (payment.getAttributes() != null) {
+			for (PaymentAttribute attribute : payment.getAttributes()) {
+				if (attribute != null && StringUtils.isNotBlank(attribute.getUuid())) {
+					attributesByUuid.put(attribute.getUuid(), attribute);
+				}
+			}
+		}
+
+		for (Map.Entry<String, String> update : attributeValues.entrySet()) {
+			PaymentAttribute attribute = attributesByUuid.get(update.getKey());
+			if (attribute == null) {
+				throw new IllegalArgumentException("Payment attribute not found with UUID: " + update.getKey());
+			}
+			String oldValue = StringUtils.trimToNull(attribute.getValue());
+			String newValue = StringUtils.trimToNull(update.getValue());
+			attribute.setValue(update.getValue());
+			if (!java.util.Objects.equals(oldValue, newValue)) {
+				changed.add(attribute);
+			}
+		}
+		return changed;
+	}
+
+	void validateChangedPaymentAttributes(Bill bill, Payment payment, Set<PaymentAttribute> changedAttributes) {
+		if (changedAttributes == null || changedAttributes.isEmpty() || Boolean.TRUE.equals(payment.getVoided())) {
+			return;
+		}
+		for (PaymentAttribute changed : changedAttributes) {
+			String changedType = PaymentReplayUtil.getAttributeTypeKey(changed);
+			String changedValue = StringUtils.trimToNull(changed.getValue());
+			if (changedType == null || changedValue == null) {
+				continue;
+			}
+			for (Payment otherPayment : bill.getPayments()) {
+				if (otherPayment == null || otherPayment == payment || Boolean.TRUE.equals(otherPayment.getVoided())
+				        || otherPayment.getAttributes() == null) {
+					continue;
+				}
+				for (PaymentAttribute other : otherPayment.getAttributes()) {
+					if (changedType.equals(PaymentReplayUtil.getAttributeTypeKey(other))
+					        && changedValue.equals(StringUtils.trimToNull(other.getValue()))) {
+						throw duplicatePaymentAttributeException(changed);
+					}
+				}
+			}
+		}
+	}
+
+	private IllegalArgumentException duplicatePaymentAttributeException(PaymentAttribute attribute) {
+		return new IllegalArgumentException(String.format(
+		    "Duplicate payment attribute value '%s' found for attribute type '%s' across multiple payments in the same bill",
+		    attribute.getValue().trim(), attribute.getAttributeType().getName()));
+	}
+
+	Bill persistBillWithoutPaymentAttributeValidation(Bill bill) {
+		validateBillNote(bill);
+		normalizeLineItemPriceOverrides(bill);
+		allocatePaymentsToLineItems(bill);
+		bill.synchronizeBillStatus();
+		return getRepository().save(bill);
 	}
 
 	private void allocatePaymentsToLineItems(Bill bill) {
