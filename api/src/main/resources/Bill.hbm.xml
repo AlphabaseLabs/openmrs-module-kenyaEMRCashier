@@ -227,6 +227,7 @@
 		<many-to-one name="bill" class="org.openmrs.module.kenyaemr.cashier.api.model.Bill" column="bill_id" not-null="true" />
 		<many-to-one name="item" class="org.openmrs.module.stockmanagement.api.model.StockItem" column="item_id" not-null="false" />
 		<many-to-one name="billableService" class="org.openmrs.module.kenyaemr.cashier.api.model.BillableService" column="service_id" not-null="false" />
+		<many-to-one name="provider" class="org.openmrs.Provider" column="provider_id" not-null="false" />
 		<many-to-one name="itemPrice" class="org.openmrs.module.kenyaemr.cashier.api.model.CashierItemPrice" column="price_id" />
 		<property name="price" type="java.math.BigDecimal" column="price" not-null="true" />
 		<property name="originalPrice" type="java.math.BigDecimal" column="original_price" />

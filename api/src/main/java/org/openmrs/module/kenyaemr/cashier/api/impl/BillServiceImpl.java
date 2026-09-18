@@ -356,13 +356,24 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		if (bill.getTotal().compareTo(BigDecimal.ZERO) < 0 && !Context.hasPrivilege(PrivilegeConstants.REFUND_MONEY)) {
 			throw new AccessControlException("Access denied to give a refund.");
 		}
-		IReceiptNumberGenerator generator = ReceiptNumberGeneratorFactory.getGenerator();
-		if (generator == null) {
-			LOG.warn("No receipt number generator has been defined.  Bills will not be given a receipt number until one is"
-			        + " defined.");
-		} else {
-			if (StringUtils.isEmpty(bill.getReceiptNumber())) {
-				bill.setReceiptNumber(generator.generateNumber(bill));
+		// Creation requests reuse an open bill; updates by ID keep their existing save path.
+		List<Bill> bills = bill.getId() == null ? searchBill(bill.getPatient()) : Collections.<Bill>emptyList();
+		boolean reusesOpenBill = !bills.isEmpty() && bills.get(0).canAcceptNewItems();
+		if (reusesOpenBill && (bill.getLineItems() == null || bill.getLineItems().isEmpty())
+		        && (bill.getPayments() == null || bill.getPayments().isEmpty())) {
+			// Opening an existing bill must not change its status or consume a receipt number.
+			return bills.get(0);
+		}
+
+		if (!reusesOpenBill) {
+			IReceiptNumberGenerator generator = ReceiptNumberGeneratorFactory.getGenerator();
+			if (generator == null) {
+				LOG.warn("No receipt number generator has been defined.  Bills will not be given a receipt number until one is"
+				        + " defined.");
+			} else {
+				if (StringUtils.isEmpty(bill.getReceiptNumber())) {
+					bill.setReceiptNumber(generator.generateNumber(bill));
+				}
 			}
 		}
 
@@ -374,7 +385,6 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			return super.save(bill);
 		}
 
-		List<Bill> bills = searchBill(bill.getPatient());
 		if(!bills.isEmpty()) {
 			Bill billToUpdate = bills.get(0);
 			LOG.info("Found existing bill: " + billToUpdate.getReceiptNumber() + " with status: " + billToUpdate.getStatus() + ", closed: " + billToUpdate.isClosed() + ", voided: " + billToUpdate.getVoided());
@@ -396,10 +406,10 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 			}
 			
 			// Create a copy of the line items to avoid ConcurrentModificationException
-			List<BillLineItem> itemsToAdd = new ArrayList<>(bill.getLineItems());
+			List<BillLineItem> itemsToAdd = bill.getLineItems() == null
+			        ? Collections.<BillLineItem>emptyList() : new ArrayList<>(bill.getLineItems());
 			for (BillLineItem item: itemsToAdd) {
-				item.setBill(billToUpdate);
-				billToUpdate.getLineItems().add(item);
+				billToUpdate.addLineItem(item);
 			}
 
 			// Merge incoming payments as well; previously these were ignored for existing open bills.

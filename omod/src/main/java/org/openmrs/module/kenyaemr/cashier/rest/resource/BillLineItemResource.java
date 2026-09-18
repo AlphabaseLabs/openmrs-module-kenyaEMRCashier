@@ -19,6 +19,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.logging.log4j.util.Strings;
 import org.openmrs.Order;
 import org.openmrs.Patient;
+import org.openmrs.Provider;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyaemr.cashier.api.BillLineItemService;
 import org.openmrs.module.kenyaemr.cashier.api.IBillService;
@@ -82,6 +83,8 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
         if (rep instanceof DefaultRepresentation || rep instanceof FullRepresentation) {
             description.addProperty("item");
             description.addProperty("billableService", Representation.REF);
+            description.addProperty("provider", Representation.REF);
+            description.addProperty("dateCreated");
             description.addProperty("quantity");
             description.addProperty("price");
             description.addProperty("originalPrice");
@@ -117,6 +120,28 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
         IBillableItemsService service = Context.getService(IBillableItemsService.class);
         String serviceUuid = (String) item;
         instance.setBillableService(service.getByUuid(serviceUuid));
+    }
+
+    @PropertySetter(value = "provider")
+    public void setProvider(BillLineItem instance, Object value) {
+        if (value != null && !(value instanceof String) && !(value instanceof Map)) {
+            throw new IllegalArgumentException("Provider must be specified by UUID or reference");
+        }
+        if (value instanceof Map && !((Map<?, ?>) value).containsKey("uuid")) {
+            throw new IllegalArgumentException("Provider reference must contain a UUID");
+        }
+
+        String providerUuid = StringUtils.trimToNull(extractUuid(value));
+        if (providerUuid == null) {
+            instance.setProvider(null);
+            return;
+        }
+
+        Provider provider = Context.getProviderService().getProviderByUuid(providerUuid);
+        if (provider == null) {
+            throw new IllegalArgumentException("No provider found with UUID: " + providerUuid);
+        }
+        instance.setProvider(provider);
     }
 
     @PropertyGetter(value = "item")
@@ -519,12 +544,12 @@ public class BillLineItemResource extends BaseRestDataResource<BillLineItem> {
         return null;
     }
 
-    private org.openmrs.Provider resolveProvider(Object value) {
+    private Provider resolveProvider(Object value) {
         String uuid = getStringValue(value);
         if (StringUtils.isBlank(uuid)) {
             return null;
         }
-        org.openmrs.Provider provider = Context.getProviderService().getProviderByUuid(uuid);
+        Provider provider = Context.getProviderService().getProviderByUuid(uuid);
         if (provider == null) {
             throw new IllegalArgumentException("Invalid sponsor provider UUID for discount");
         }

@@ -1607,4 +1607,52 @@
 		</addColumn>
 	</changeSet>
 
+	<changeSet id="kenyaemr.cashier-003-add-line-item-provider" author="alphabase">
+		<preConditions onFail="MARK_RAN">
+			<and>
+				<tableExists tableName="cashier_bill_line_item" />
+				<not>
+					<columnExists tableName="cashier_bill_line_item" columnName="provider_id" />
+				</not>
+			</and>
+		</preConditions>
+		<comment>Add optional provider reference to bill line items</comment>
+		<addColumn tableName="cashier_bill_line_item">
+			<column name="provider_id" type="int" />
+		</addColumn>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-003-add-line-item-provider-index" author="alphabase">
+		<preConditions onFail="MARK_RAN">
+			<and>
+				<columnExists tableName="cashier_bill_line_item" columnName="provider_id" />
+				<not>
+					<indexExists indexName="cashier_bill_line_item_provider_idx" />
+				</not>
+			</and>
+		</preConditions>
+		<comment>Index line-item provider lookups before adding the foreign key</comment>
+		<createIndex indexName="cashier_bill_line_item_provider_idx" tableName="cashier_bill_line_item">
+			<column name="provider_id" />
+			<column name="bill_id" />
+			<column name="voided" />
+		</createIndex>
+	</changeSet>
+
+	<changeSet id="kenyaemr.cashier-003-add-line-item-provider-foreign-key" author="alphabase">
+		<preConditions onFail="MARK_RAN">
+			<and>
+				<columnExists tableName="cashier_bill_line_item" columnName="provider_id" />
+				<tableExists tableName="provider" />
+				<not>
+					<foreignKeyConstraintExists foreignKeyName="cashier_bill_line_item_provider_fk" />
+				</not>
+			</and>
+		</preConditions>
+		<comment>Enforce the optional line-item provider reference</comment>
+		<addForeignKeyConstraint constraintName="cashier_bill_line_item_provider_fk"
+			baseTableName="cashier_bill_line_item" baseColumnNames="provider_id"
+			referencedTableName="provider" referencedColumnNames="provider_id" />
+	</changeSet>
+
 </databaseChangeLog>

@@ -19,6 +19,7 @@ import java.util.Set;
 
 import org.openmrs.BaseOpenmrsData;
 import org.openmrs.Order;
+import org.openmrs.Provider;
 import org.openmrs.module.stockmanagement.api.model.StockItem;
 
 /**
@@ -32,6 +33,7 @@ public class BillLineItem extends BaseOpenmrsData {
 	private Bill bill;
 	private StockItem item;
 	private BillableService billableService;
+	private Provider provider;
 	private String itemOrServiceConceptUuid;
 	private String serviceTypeUuid;
 	private BigDecimal price;
@@ -119,6 +121,14 @@ public class BillLineItem extends BaseOpenmrsData {
 
 	public void setBillableService(BillableService billableService) {
 		this.billableService = billableService;
+	}
+
+	public Provider getProvider() {
+		return provider;
+	}
+
+	public void setProvider(Provider provider) {
+		this.provider = provider;
 	}
 
 	public Integer getQuantity() {
