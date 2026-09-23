@@ -1,11 +1,14 @@
 package org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout;
 
 import java.io.IOException;
+import java.util.EnumSet;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang.StringUtils;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BillingPatientInformation.Field;
 import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +35,64 @@ public final class BrandingConfigurationProvider {
 			LOG.warn("Failed to read billing print settings from the shared branding configuration", e);
 			return DEFAULT_SHOW_BILLING_NOTE;
 		}
+	}
+
+	public static Set<Field> getInvoicePatientFields() {
+		try {
+			return resolveInvoicePatientFields(readConfiguration());
+		}
+		catch (Exception e) {
+			LOG.warn("Failed to read invoice patient information settings", e);
+			return defaultInvoicePatientFields();
+		}
+	}
+
+	public static Set<Field> getBillStatementPatientFields() {
+		try {
+			return resolveBillStatementPatientFields(readConfiguration());
+		}
+		catch (Exception e) {
+			LOG.warn("Failed to read bill statement patient information settings", e);
+			return EnumSet.allOf(Field.class);
+		}
+	}
+
+	static Set<Field> resolveInvoicePatientFields(String json) throws IOException {
+		return resolveInvoicePatientFields(parseObject(json));
+	}
+
+	static Set<Field> resolveBillStatementPatientFields(String json) throws IOException {
+		JsonNode root = parseObject(json);
+		JsonNode applySelection = root == null ? null : root.get("applyPatientInformationToBillStatement");
+		if (applySelection != null && applySelection.isBoolean() && applySelection.asBoolean()) {
+			return resolveInvoicePatientFields(root);
+		}
+		return EnumSet.allOf(Field.class);
+	}
+
+	private static Set<Field> resolveInvoicePatientFields(JsonNode root) {
+		Set<Field> fields = defaultInvoicePatientFields();
+		if (root == null) {
+			return fields;
+		}
+		JsonNode configured = root.path("billingPatientInformation");
+		for (Field field : Field.values()) {
+			JsonNode enabled = configured.path(field.getKey());
+			if (!enabled.isBoolean()) {
+				continue;
+			}
+			if (enabled.asBoolean()) {
+				fields.add(field);
+			}
+			else {
+				fields.remove(field);
+			}
+		}
+		return fields;
+	}
+
+	private static Set<Field> defaultInvoicePatientFields() {
+		return EnumSet.of(Field.NAME, Field.MR_NUMBER, Field.PHONE, Field.ADDRESS);
 	}
 
 	static String readConfiguration() {

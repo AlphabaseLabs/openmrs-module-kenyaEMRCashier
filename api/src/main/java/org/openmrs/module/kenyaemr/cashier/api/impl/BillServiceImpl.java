@@ -34,7 +34,6 @@ import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.WordUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hibernate.Criteria;
@@ -46,8 +45,6 @@ import org.openmrs.Location;
 import org.openmrs.OpenmrsData;
 import org.openmrs.OpenmrsObject;
 import org.openmrs.Patient;
-import org.openmrs.PatientIdentifier;
-import org.openmrs.PatientIdentifierType;
 import org.openmrs.User;
 import org.openmrs.annotation.Authorized;
 import org.openmrs.api.context.Context;
@@ -82,6 +79,8 @@ import org.openmrs.module.kenyaemr.cashier.api.base.exception.PrivilegeException
 import org.openmrs.module.kenyaemr.cashier.api.search.BillSearch;
 import org.openmrs.module.kenyaemr.cashier.api.util.PrivilegeConstants;
 import org.openmrs.module.kenyaemr.cashier.api.util.PaymentReplayUtil;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BillingPatientInformation;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingConfigurationProvider;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingLogoProvider;
 import org.openmrs.module.kenyaemr.cashier.util.Utils;
@@ -123,7 +122,6 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	private static final String GP_FACILITY_ADDRESS_DETAILS = "kenyaemr.cashier.receipt.facilityAddress";
 	private static final String GP_FACILITY_INFORMATION = "kenyaemr.cashier.receipt.facilityInformation";
 	private static final ObjectMapper objectMapper = new ObjectMapper();
-	public static final String OPENMRS_ID = "05a29f94-c0ed-11e2-94be-8c13b969e334";
 	public static final String PAYMENT_REFERENCE_ATTRIBUTE = "d453e528-0264-4d6e-ae23-bc0b777e1146";
 	private static final String EMPTY_VALUE_DISPLAY = "--";
 	private static final String CASH_PAYMENT_METHOD = "cash";
@@ -1614,12 +1612,8 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 	@Override
 	public File downloadBillReceipt(Bill bill) {
 
+		PdfGenerationUtils.requirePatient(bill);
 		Patient patient = bill.getPatient();
-		String fullName = patient.getGivenName().concat(" ").concat(
-				patient.getMiddleName() != null ? bill.getPatient().getMiddleName() : ""
-		).concat(" ").concat(
-				patient.getFamilyName() != null ? bill.getPatient().getFamilyName() : ""
-		);
 
         File returnFile = null;
         try {
@@ -1634,8 +1628,6 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
             throw new RuntimeException(e);
         }
 
-		PatientIdentifierType openmrsIdType = Context.getPatientService().getPatientIdentifierTypeByUuid(OPENMRS_ID);
-		PatientIdentifier openmrsId = patient.getPatientIdentifier(openmrsIdType); // TODO: we should check for any NULL
         /**
 		 * https://kb.itextpdf.com/home/it7kb/faq/how-to-set-the-page-size-to-envelope-size-with-landscape-orientation
 		 * page size: 3.5inch length, 1.1 inch height
@@ -1725,11 +1717,7 @@ public class BillServiceImpl extends BaseEntityDataServiceImpl<Bill> implements 
 		receiptHeader.addCell(new Paragraph("Receipt No:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
 		receiptHeader.addCell(new Paragraph(bill.getReceiptNumber())).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
 
-		receiptHeader.addCell(new Paragraph("Client:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(WordUtils.capitalizeFully(fullName + " (" + patient.getAge() + " Years)"))).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
-
-		receiptHeader.addCell(new Paragraph("Client ID:")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(headerSectionFont);
-		receiptHeader.addCell(new Paragraph(openmrsId != null ? openmrsId.getIdentifier().toUpperCase() : "")).setFontSize(FONT_SIZE_12).setTextAlignment(TextAlignment.LEFT).setFont(helvetica);
+		BillingPatientInformation.addReceiptRows(receiptHeader, patient, helvetica);
 
 
 		float[] columnWidths = { 1f, 4f, 2f, 2f, 2f, 2f };

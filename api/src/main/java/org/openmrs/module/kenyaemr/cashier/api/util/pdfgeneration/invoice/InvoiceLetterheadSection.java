@@ -5,10 +5,11 @@ import com.itextpdf.layout.borders.SolidBorder;
 import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
-import org.openmrs.Patient;
 import org.openmrs.module.kenyaemr.cashier.api.model.Bill;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfDocumentService;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.PdfGenerationUtils;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BillingPatientInformation;
+import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.BrandingConfigurationProvider;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.DocumentHeader;
 import org.openmrs.module.kenyaemr.cashier.api.util.pdfgeneration.layout.PrintablePdfStyle;
 
@@ -35,20 +36,10 @@ public class InvoiceLetterheadSection implements PdfDocumentService.LetterheadSe
                 .setMarginTop(0)
                 .setMarginBottom(DETAIL_SECTION_BOTTOM_MARGIN);
 
-        headerTable.addCell(createPatientInfoCell(bill.getPatient()));
+        headerTable.addCell(BillingPatientInformation.createCell(bill.getPatient(),
+                BrandingConfigurationProvider.getInvoicePatientFields()));
         headerTable.addCell(createInvoiceSummaryCell(bill, currency));
         doc.add(headerTable);
-    }
-
-    private Cell createPatientInfoCell(Patient patient) {
-        Cell cell = PrintablePdfStyle.detailCell();
-        cell.add(PrintablePdfStyle.sectionHeading("Patient information"));
-        cell.add(PrintablePdfStyle.inlineInfoLine("Name", PdfGenerationUtils.getPatientName(patient), true));
-        cell.add(PrintablePdfStyle.inlineInfoLine("MR #", PdfGenerationUtils.getPatientIdentifier(patient)));
-        cell.add(PrintablePdfStyle.inlineInfoLine("Phone", PdfGenerationUtils.getPatientPhoneNumber(patient)));
-        cell.add(PrintablePdfStyle.inlineInfoLine("Address",
-                PdfGenerationUtils.formatPatientAddress(patient.getPersonAddress())));
-        return cell;
     }
 
     private Cell createInvoiceSummaryCell(Bill bill, PdfGenerationUtils.CurrencyFormatter currency) {
