@@ -47,30 +47,8 @@ public final class BrandingConfigurationProvider {
 		}
 	}
 
-	public static Set<Field> getBillStatementPatientFields() {
-		try {
-			return resolveBillStatementPatientFields(readConfiguration());
-		}
-		catch (Exception e) {
-			LOG.warn("Failed to read bill statement patient information settings", e);
-			return EnumSet.allOf(Field.class);
-		}
-	}
-
 	static Set<Field> resolveInvoicePatientFields(String json) throws IOException {
-		return resolveInvoicePatientFields(parseObject(json));
-	}
-
-	static Set<Field> resolveBillStatementPatientFields(String json) throws IOException {
 		JsonNode root = parseObject(json);
-		JsonNode applySelection = root == null ? null : root.get("applyPatientInformationToBillStatement");
-		if (applySelection != null && applySelection.isBoolean() && applySelection.asBoolean()) {
-			return resolveInvoicePatientFields(root);
-		}
-		return EnumSet.allOf(Field.class);
-	}
-
-	private static Set<Field> resolveInvoicePatientFields(JsonNode root) {
 		Set<Field> fields = defaultInvoicePatientFields();
 		if (root == null) {
 			return fields;

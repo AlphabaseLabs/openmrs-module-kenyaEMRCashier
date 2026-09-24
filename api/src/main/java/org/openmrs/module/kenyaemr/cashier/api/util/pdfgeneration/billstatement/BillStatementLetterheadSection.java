@@ -37,7 +37,7 @@ public class BillStatementLetterheadSection implements PdfDocumentService.Letter
                 .setMarginBottom(DETAIL_SECTION_BOTTOM_MARGIN);
 
         summaryTable.addCell(BillingPatientInformation.createCell(bill.getPatient(),
-                BrandingConfigurationProvider.getBillStatementPatientFields()));
+                BrandingConfigurationProvider.getInvoicePatientFields()));
         summaryTable.addCell(createBillSummaryCell(bill, currency));
         doc.add(summaryTable);
     }

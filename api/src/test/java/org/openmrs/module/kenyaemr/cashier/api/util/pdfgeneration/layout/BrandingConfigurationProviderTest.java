@@ -51,31 +51,15 @@ public class BrandingConfigurationProviderTest {
 	}
 
 	@Test
-	public void shouldShowAllBillStatementFieldsUnlessExplicitlyEnabled() throws Exception {
-		assertEquals(EnumSet.allOf(Field.class), BrandingConfigurationProvider.resolveBillStatementPatientFields(""));
+	public void shouldIgnoreLegacyBillStatementFlagWhenResolvingSharedPatientFields() throws Exception {
 		for (String setting : new String[] { "", "\"applyPatientInformationToBillStatement\":false,",
+		        "\"applyPatientInformationToBillStatement\":true,",
 		        "\"applyPatientInformationToBillStatement\":\"true\",",
 		        "\"applyPatientInformationToBillStatement\":null," }) {
 			String configuration = "{" + setting + "\"billingPatientInformation\":{\"name\":false,\"phone\":false}}";
-			assertEquals(EnumSet.allOf(Field.class),
-			    BrandingConfigurationProvider.resolveBillStatementPatientFields(configuration));
-			assertFalse(BrandingConfigurationProvider.resolveInvoicePatientFields(configuration).contains(Field.NAME));
+			assertEquals(EnumSet.of(Field.MR_NUMBER, Field.ADDRESS),
+			    BrandingConfigurationProvider.resolveInvoicePatientFields(configuration));
 		}
-	}
-
-	@Test
-	public void shouldApplyInvoiceSelectionToBillStatementOnlyWhenEnabled() throws Exception {
-		String configuration = "{\"applyPatientInformationToBillStatement\":true,"
-		        + "\"billingPatientInformation\":{\"name\":false,\"phone\":false,\"age\":true}}";
-		assertEquals(EnumSet.of(Field.MR_NUMBER, Field.AGE, Field.ADDRESS),
-		    BrandingConfigurationProvider.resolveBillStatementPatientFields(configuration));
-	}
-
-	@Test
-	public void shouldUseInvoiceDefaultsWhenStatementOptInHasNoSelection() throws Exception {
-		assertEquals(EnumSet.of(Field.NAME, Field.MR_NUMBER, Field.PHONE, Field.ADDRESS),
-		    BrandingConfigurationProvider.resolveBillStatementPatientFields(
-		        "{\"applyPatientInformationToBillStatement\":true}"));
 	}
 
 	@Test
@@ -84,8 +68,6 @@ public class BrandingConfigurationProviderTest {
 		fields.clear();
 		assertEquals(EnumSet.of(Field.NAME, Field.MR_NUMBER, Field.PHONE, Field.ADDRESS),
 		    BrandingConfigurationProvider.resolveInvoicePatientFields("{}"));
-		BrandingConfigurationProvider.resolveBillStatementPatientFields("{}").clear();
-		assertEquals(EnumSet.allOf(Field.class), BrandingConfigurationProvider.resolveBillStatementPatientFields("{}"));
 	}
 
 	@Test(expected = IOException.class)
@@ -94,15 +76,8 @@ public class BrandingConfigurationProviderTest {
 	}
 
 	@Test(expected = IOException.class)
-	public void shouldRejectNonObjectStatementConfiguration() throws Exception {
-		BrandingConfigurationProvider.resolveBillStatementPatientFields("[]");
-	}
-
-	@Test
-	public void shouldAllowOptedInBillStatementsToHideAllPatientFields() throws Exception {
-		assertTrue(BrandingConfigurationProvider.resolveBillStatementPatientFields(
-		    "{\"applyPatientInformationToBillStatement\":true,\"billingPatientInformation\":{\"name\":false,\"mrNumber\":false,\"age\":false,\"gender\":false,\"phone\":false,\"address\":false}}")
-		        .isEmpty());
+	public void shouldRejectNonObjectPatientConfiguration() throws Exception {
+		BrandingConfigurationProvider.resolveInvoicePatientFields("[]");
 	}
 
 	@Test
